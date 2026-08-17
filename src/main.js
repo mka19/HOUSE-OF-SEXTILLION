@@ -581,7 +581,7 @@ ringLight.position.set(0, CFG.ceilingY - 0.4, 0);
 scene.add(ringLight);
 
 // minimal flat fill — HDRI carries the ambient, so keep these low
-const fillLight = new THREE.HemisphereLight(0xfff2d8, 0x342a16, 0.12);
+const fillLight = new THREE.HemisphereLight(0xfff2d8, 0x342a16, 0.22);
 scene.add(fillLight);
 
 // grazing wall washers — raking light down the mural so the bas-relief casts
@@ -1228,7 +1228,9 @@ function animate() {
 
   composer.render();
 
-  if (!started) { started = true; reveal(); }
+  // hold the reveal until the HDRI has lit the scene (with a safety timeout),
+  // so it never flashes dark before image-based lighting is applied
+  if (!started && (scene.environment || t > 4)) { started = true; reveal(); }
 }
 animate();
 

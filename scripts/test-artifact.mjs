@@ -7,7 +7,7 @@ p.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
 p.on('console',m=>{if(m.type()==='error')errs.push('CONSOLE '+m.text());});
 await p.goto('file:///tmp/artifact-test.html',{waitUntil:'load'});
 await p.waitForFunction(()=>window.__scene&&document.getElementById('loader')?.classList.contains('is-hidden'),{timeout:25000}).catch(()=>errs.push('READY_TIMEOUT'));
-await p.waitForTimeout(2500);
+await p.waitForTimeout(6000);
 const st=await p.evaluate(()=>({scene:!!window.__scene, env: !!(window.__scene&&window.__scene.scene.environment), mural: !!window.__MURAL_DATA_URI}));
 console.log('STATE', JSON.stringify(st));
 console.log('ERRORS', errs.slice(0,6).join(' || ')||'none');
