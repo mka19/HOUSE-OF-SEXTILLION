@@ -1,0 +1,5 @@
+Drop your reference panorama here as:  mural.jpg
+
+The curved wall auto-loads ./textures/mural.jpg if present.
+A wide ~3:1 (e.g. 4096x1365) image maps best across the 189° curve.
+If this file is absent, a procedural recreation is generated at runtime.

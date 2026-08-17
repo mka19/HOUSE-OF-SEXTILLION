@@ -1,0 +1,19 @@
+{
+  "name": "house-of-sextillion",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host --port 5173",
+    "build": "vite build",
+    "preview": "vite preview --host --port 4173"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.62.1",
+    "vite": "^5.4.10"
+  },
+  "dependencies": {
+    "@pmndrs/assets": "^1.7.0",
+    "three": "^0.169.0"
+  }
+}

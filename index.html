@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>House of Sextillion — Maison</title>
+    <meta name="description" content="House of Sextillion — a luxury maison of bags, belts and shoes." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <!-- Loading veil -->
+    <div id="loader" class="loader" aria-hidden="true">
+      <div class="loader__mark">HOUSE OF SEXTILLION</div>
+      <div class="loader__bar"><span id="loader-fill" class="loader__fill"></span></div>
+    </div>
+
+    <!-- WebGL canvas -->
+    <canvas id="scene"></canvas>
+
+    <!-- Vignette + grain overlay for cinematic depth -->
+    <div class="grade" aria-hidden="true"></div>
+
+    <!-- Brand chrome -->
+    <header class="chrome chrome--top">
+      <div class="chrome__brand">HOUSE OF SEXTILLION</div>
+      <nav class="chrome__nav">
+        <a href="#" class="nav-link">Bags</a>
+        <a href="#" class="nav-link">Belts</a>
+        <a href="#" class="nav-link">Shoes</a>
+        <a href="#" class="nav-link nav-link--muted">Maison</a>
+      </nav>
+    </header>
+
+    <footer class="chrome chrome--bottom">
+      <div class="chrome__eyebrow">The Golden Panorama</div>
+      <h1 class="chrome__title">A room made of light</h1>
+      <p class="chrome__lede">Real-time atelier · move your cursor to shape the light</p>
+    </footer>
+
+    <div id="tooltip" class="tooltip" aria-hidden="true"></div>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
