@@ -4,6 +4,7 @@ import { Reflector } from 'three/examples/jsm/objects/Reflector.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { BokehPass } from 'three/examples/jsm/postprocessing/BokehPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { GammaCorrectionShader } from 'three/examples/jsm/shaders/GammaCorrectionShader.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
@@ -23,7 +24,10 @@ const CFG = {
   fogColor: 0x6a5836,
   fogDensity: 0.009,
   bloom: { strength: 0.16, radius: 0.6, threshold: 0.96 },
-  camera: { base: new THREE.Vector3(0, 3.4, 10.8) },
+  // telephoto + close = the hero feels substantial; background compresses behind it
+  fov: 40,
+  camera: { base: new THREE.Vector3(0, 3.55, 10.7) },
+  heroFocusY: 2.3,
 };
 
 /* -------------------------------------------------------------------------- */
@@ -42,11 +46,11 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(CFG.fogColor, CFG.fogDensity);
 
-const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 200);
+const camera = new THREE.PerspectiveCamera(CFG.fov, window.innerWidth / window.innerHeight, 0.1, 200);
 camera.position.copy(CFG.camera.base);
 
-const lookTarget = new THREE.Vector3(0, 3.7, -CFG.wallRadius);
-const LOOK_BASE_Y = 3.7;
+const lookTarget = new THREE.Vector3(0, CFG.heroFocusY, -CFG.wallRadius);
+const LOOK_BASE_Y = CFG.heroFocusY;
 
 /* -------------------------------------------------------------------------- */
 /*  Shared procedural textures — micro-imperfection so nothing reads perfectly  */
@@ -506,10 +510,32 @@ const ringLight = new THREE.PointLight(0xffe1ab, 5, 70, 1.4);
 ringLight.position.set(0, CFG.ceilingY - 0.4, 0);
 scene.add(ringLight);
 
-const fillLight = new THREE.HemisphereLight(0xfff2d8, 0x3a2f18, 0.4);
+const fillLight = new THREE.HemisphereLight(0xfff2d8, 0x3a2f18, 0.28);
 scene.add(fillLight);
-const ambient = new THREE.AmbientLight(0xfff0d6, 0.35);
+const ambient = new THREE.AmbientLight(0xfff0d6, 0.22);
 scene.add(ambient);
+
+// Real key light over the hero — actual soft-shadow casting + physical falloff,
+// so light believably interacts with the product/pedestal instead of looking flat.
+const keyLight = new THREE.SpotLight(0xfff1d2, 260, 26, Math.PI / 7, 0.7, 1.6);
+keyLight.position.set(1.6, 8.4, 6.2);
+keyLight.castShadow = true;
+keyLight.shadow.mapSize.set(2048, 2048);
+keyLight.shadow.camera.near = 2;
+keyLight.shadow.camera.far = 22;
+keyLight.shadow.bias = -0.0006;
+keyLight.shadow.radius = 9;            // soft penumbra
+keyLight.shadow.blurSamples = 24;
+scene.add(keyLight);
+const keyTarget = new THREE.Object3D();
+keyTarget.position.set(0, 2.0, 4.2);   // the hero
+scene.add(keyTarget);
+keyLight.target = keyTarget;
+
+// A cooler rim/back light for shape separation (no shadow, cheap).
+const rimLight = new THREE.SpotLight(0xbfd0e6, 40, 30, Math.PI / 6, 0.9, 1.5);
+rimLight.position.set(-6, 6, -6);
+scene.add(rimLight);
 
 /* -------------------------------------------------------------------------- */
 /*  Mouse-follow spotlight sweeping the wall/floor                              */
@@ -532,9 +558,9 @@ scene.add(parallaxGroup);
 const interactive = [];
 // Hero product dead-centre as the focal point; two quieter accents set back.
 const pedestalDefs = [
-  { x: 0.0, z: 2.4, label: 'Belts', color: 0xd8b45e, hero: true, scale: 1.18 },
-  { x: -9.2, z: -0.6, label: 'Bags', color: 0xc9a24c, hero: false, scale: 0.82 },
-  { x: 9.2, z: -0.6, label: 'Shoes', color: 0xbf9846, hero: false, scale: 0.82 },
+  { x: 0.0, z: 4.2, label: 'Belts', color: 0xd8b45e, hero: true, scale: 1.6 },
+  { x: -10.5, z: -1.2, label: 'Bags', color: 0xc9a24c, hero: false, scale: 0.9 },
+  { x: 10.5, z: -1.2, label: 'Shoes', color: 0xbf9846, hero: false, scale: 0.9 },
 ];
 
 // A smoothly turned pedestal profile — every corner is a short arc, no sharp edges.
@@ -780,6 +806,13 @@ const floorPlaneMath = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
 
+// Depth-of-field: focus on the hero, let the mural fall softly out of focus.
+const bokeh = new BokehPass(scene, camera, {
+  focus: 6.5, aperture: 0.0012, maxblur: 0.0042,
+  width: window.innerWidth, height: window.innerHeight,
+});
+composer.addPass(bokeh);
+
 const bloom = new UnrealBloomPass(
   new THREE.Vector2(window.innerWidth, window.innerHeight),
   CFG.bloom.strength, CFG.bloom.radius, CFG.bloom.threshold,
@@ -850,6 +883,7 @@ function onResize() {
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
   composer.setSize(window.innerWidth, window.innerHeight);
+  bokeh.setSize(window.innerWidth, window.innerHeight);
 }
 window.addEventListener('resize', onResize);
 
@@ -869,7 +903,9 @@ function reveal() {
 /* -------------------------------------------------------------------------- */
 const clock = new THREE.Clock();
 const tmpV = new THREE.Vector3();
+const heroPos = new THREE.Vector3();
 let started = false;
+const HERO_Z = 4.2;
 
 function damp(current, target, lambda, dt) {
   return current + (target - current) * (1 - Math.exp(-lambda * dt));
@@ -880,33 +916,39 @@ function animate() {
   const dt = Math.min(clock.getDelta(), 0.05);
   const t = clock.elapsedTime;
 
-  // two-stage easing -> deep, fluid inertia with no snap (slower = more premium)
-  pointerEased.x = damp(pointerEased.x, pointer.x, 1.4, dt);
-  pointerEased.y = damp(pointerEased.y, pointer.y, 1.4, dt);
-  pointerSmooth.x = damp(pointerSmooth.x, pointerEased.x, 1.0, dt);
-  pointerSmooth.y = damp(pointerSmooth.y, pointerEased.y, 1.0, dt);
+  // deep multi-stage easing -> a slow, deliberate camera-operator feel (no snap)
+  pointerEased.x = damp(pointerEased.x, pointer.x, 1.1, dt);
+  pointerEased.y = damp(pointerEased.y, pointer.y, 1.1, dt);
+  pointerSmooth.x = damp(pointerSmooth.x, pointerEased.x, 0.7, dt);
+  pointerSmooth.y = damp(pointerSmooth.y, pointerEased.y, 0.7, dt);
 
-  // idle drift: when the user is still, gently sway the camera
-  const idle = Math.min(1, (performance.now() - lastInteract) / 3600);
-  const driftX = Math.sin(t * 0.13) * 0.6 + Math.sin(t * 0.31) * 0.2;
-  const driftY = Math.cos(t * 0.17) * 0.24;
+  // idle drift: when the user is still, very slowly breathe the camera
+  const idle = Math.min(1, (performance.now() - lastInteract) / 5200);
+  const driftX = Math.sin(t * 0.07) * 0.4 + Math.sin(t * 0.17) * 0.12;
+  const driftY = Math.cos(t * 0.09) * 0.15;
 
-  const targetX = CFG.camera.base.x + pointerSmooth.x * 1.7 * (1 - idle * 0.35) + driftX * idle;
-  const targetY = CFG.camera.base.y + pointerSmooth.y * 0.9 * (1 - idle * 0.35) + driftY * idle + Math.sin(t * 0.42) * 0.05;
-  const targetZ = CFG.camera.base.z - Math.abs(pointerSmooth.y) * 0.4;
+  const targetX = CFG.camera.base.x + pointerSmooth.x * 1.35 * (1 - idle * 0.3) + driftX * idle;
+  const targetY = CFG.camera.base.y + pointerSmooth.y * 0.7 * (1 - idle * 0.3) + driftY * idle + Math.sin(t * 0.28) * 0.04;
+  const targetZ = CFG.camera.base.z - Math.abs(pointerSmooth.y) * 0.35;
 
-  camera.position.x = damp(camera.position.x, targetX, 1.0, dt);
-  camera.position.y = damp(camera.position.y, targetY, 1.0, dt);
-  camera.position.z = damp(camera.position.z, targetZ, 1.0, dt);
+  camera.position.x = damp(camera.position.x, targetX, 0.8, dt);
+  camera.position.y = damp(camera.position.y, targetY, 0.8, dt);
+  camera.position.z = damp(camera.position.z, targetZ, 0.8, dt);
 
   // eased look target with a touch of parallax (background moves slower)
-  lookTarget.x = damp(lookTarget.x, pointerSmooth.x * 2.4, 0.9, dt);
-  lookTarget.y = damp(lookTarget.y, LOOK_BASE_Y + pointerSmooth.y * 1.2, 0.9, dt);
+  lookTarget.x = damp(lookTarget.x, pointerSmooth.x * 2.0, 0.65, dt);
+  lookTarget.y = damp(lookTarget.y, LOOK_BASE_Y + pointerSmooth.y * 1.0, 0.65, dt);
   camera.lookAt(lookTarget);
 
-  // parallax on the foreground pedestals — they move MORE than the wall
-  parallaxGroup.position.x = damp(parallaxGroup.position.x, -pointerSmooth.x * 0.9, 1.4, dt);
-  parallaxGroup.position.z = damp(parallaxGroup.position.z, pointerSmooth.y * 0.5, 1.4, dt);
+  // parallax on the foreground pedestals — they move MORE than the wall (depth)
+  parallaxGroup.position.x = damp(parallaxGroup.position.x, -pointerSmooth.x * 1.1, 0.95, dt);
+  parallaxGroup.position.z = damp(parallaxGroup.position.z, pointerSmooth.y * 0.5, 0.95, dt);
+
+  // keep the key light + depth-of-field locked on the hero as it parallaxes
+  heroPos.set(parallaxGroup.position.x, 3.4, parallaxGroup.position.z + HERO_Z);
+  keyTarget.position.set(parallaxGroup.position.x, 2.6, parallaxGroup.position.z + HERO_Z);
+  keyLight.position.x = damp(keyLight.position.x, 1.6 + parallaxGroup.position.x, 1.0, dt);
+  bokeh.uniforms['focus'].value = damp(bokeh.uniforms['focus'].value, camera.position.distanceTo(heroPos), 2.0, dt);
 
   // (4) very slow "breathing" parallax on the painting itself
   muralTexture.offset.x = muralOffsetBaseX + Math.sin(t * 0.05) * 0.0016;
@@ -916,10 +958,10 @@ function animate() {
   raycaster.setFromCamera(pointerSmooth, camera);
   const hit = raycaster.intersectObject(wallPlane, false)[0];
   if (hit) {
-    followTarget.position.x = damp(followTarget.position.x, hit.point.x, 1.2, dt);
-    followTarget.position.y = damp(followTarget.position.y, hit.point.y, 1.2, dt);
-    followTarget.position.z = damp(followTarget.position.z, hit.point.z, 1.2, dt);
-    followSpot.position.x = damp(followSpot.position.x, hit.point.x * 0.4, 1.2, dt);
+    followTarget.position.x = damp(followTarget.position.x, hit.point.x, 0.7, dt);
+    followTarget.position.y = damp(followTarget.position.y, hit.point.y, 0.7, dt);
+    followTarget.position.z = damp(followTarget.position.z, hit.point.z, 0.7, dt);
+    followSpot.position.x = damp(followSpot.position.x, hit.point.x * 0.4, 0.7, dt);
   }
 
   // (7) cursor circuit decal — projected onto the floor, glowing while the mouse moves
