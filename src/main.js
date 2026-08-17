@@ -20,14 +20,14 @@ const CFG = {
   wallArc: Math.PI * 0.82,      // ~148° — fits more of the mural's cast in frame
   ceilingY: 7.7,
   exposure: 0.85,
-  envIntensity: 0.7,
+  envIntensity: 1.05,
   fogColor: 0x6a5836,
   fogDensity: 0.009,
   bloom: { strength: 0.16, radius: 0.6, threshold: 0.96 },
   // telephoto + close = the hero feels substantial; background compresses behind it
-  fov: 40,
-  camera: { base: new THREE.Vector3(0, 3.55, 10.7) },
-  heroFocusY: 2.3,
+  fov: 38,
+  camera: { base: new THREE.Vector3(0, 3.5, 13.2) },
+  heroFocusY: 2.15,
 };
 
 /* -------------------------------------------------------------------------- */
@@ -98,7 +98,38 @@ function makeRadialTexture(stops) {
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
+// Tangent-space normal map from procedural height — surface micro-detail so PBR
+// materials aren't perfectly smooth CG.
+function makeNoiseNormal(size = 512, strength = 1.6, freq = 3) {
+  const h = new Float32Array(size * size);
+  for (let i = 0; i < h.length; i++) h[i] = Math.random();
+  // smooth a couple of times
+  const at = (x, y) => h[((y + size) % size) * size + ((x + size) % size)];
+  for (let pass = 0; pass < 2; pass++) {
+    const c2 = new Float32Array(size * size);
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++)
+      c2[y * size + x] = (at(x, y) * 4 + at(x - 1, y) + at(x + 1, y) + at(x, y - 1) + at(x, y + 1)) / 8;
+    h.set(c2);
+  }
+  const cv = document.createElement('canvas'); cv.width = cv.height = size;
+  const cx = cv.getContext('2d'); const img = cx.createImageData(size, size);
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const dx = (at(x + 1, y) - at(x - 1, y)) * strength;
+    const dy = (at(x, y + 1) - at(x, y - 1)) * strength;
+    let nX = -dx, nY = -dy, nZ = 1; const len = Math.hypot(nX, nY, nZ) || 1;
+    const o = (y * size + x) * 4;
+    img.data[o] = (nX / len * 0.5 + 0.5) * 255;
+    img.data[o + 1] = (nY / len * 0.5 + 0.5) * 255;
+    img.data[o + 2] = (nZ / len * 0.5 + 0.5) * 255;
+    img.data[o + 3] = 255;
+  }
+  cx.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
 const microNoise = makeNoiseTexture(512);      // roughness micro-variation
+const microNormal = makeNoiseNormal(512, 1.4); // surface micro-normal detail
 const softSprite = makeSoftSprite();           // dust / glow particles
 
 /* -------------------------------------------------------------------------- */
@@ -261,24 +292,57 @@ function buildWallCanvas(img) {
   return c;
 }
 
-// A height/relief map derived from the painting's luminance so the figures
-// (panther, toucan, rabbit, snake) and details catch light in 3D, not flat.
-function reliefFromCanvas(src) {
-  const c = document.createElement('canvas');
+// Bas-relief maps from the painting: a contrast-curved HEIGHT map (dark subjects
+// — panther, toucan, rabbit, snake, foliage — raise; bright sky stays flat) used
+// for real vertex displacement, plus a Sobel NORMAL map so the relief shades and
+// reflects like carved form, not a pasted photo.
+function buildReliefMaps(src) {
   const scale = 0.5;
-  c.width = Math.round(src.width * scale); c.height = Math.round(src.height * scale);
-  const x = c.getContext('2d');
-  x.drawImage(src, 0, 0, c.width, c.height);
-  const img = x.getImageData(0, 0, c.width, c.height);
-  const d = img.data;
-  for (let i = 0; i < d.length; i += 4) {
-    // dark painted subjects -> raised relief; bright sky -> flat
-    const lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-    const h = 255 - lum;
-    d[i] = d[i + 1] = d[i + 2] = h; d[i + 3] = 255;
+  const w = Math.round(src.width * scale), h = Math.round(src.height * scale);
+  const hc = document.createElement('canvas'); hc.width = w; hc.height = h;
+  const hx = hc.getContext('2d'); hx.drawImage(src, 0, 0, w, h);
+  const sd = hx.getImageData(0, 0, w, h).data;
+
+  const height = new Float32Array(w * h);
+  for (let p = 0, i = 0; p < height.length; p++, i += 4) {
+    const lum = (0.299 * sd[i] + 0.587 * sd[i + 1] + 0.114 * sd[i + 2]) / 255;
+    let hgt = 1 - lum;                                   // dark = raised
+    hgt = Math.pow(Math.max(0, hgt - 0.18) / 0.82, 1.7); // only the darker subjects lift
+    height[p] = hgt;
   }
-  x.putImageData(img, 0, 0);
-  return new THREE.CanvasTexture(c);
+  // blur the height a touch so displacement is smooth, not jagged
+  const blurred = new Float32Array(w * h);
+  const at = (xx, yy) => height[Math.min(h - 1, Math.max(0, yy)) * w + Math.min(w - 1, Math.max(0, xx))];
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    blurred[y * w + x] = (at(x, y) * 4 + at(x - 1, y) + at(x + 1, y) + at(x, y - 1) + at(x, y + 1)) / 8;
+  }
+
+  const himg = hx.createImageData(w, h);
+  for (let p = 0; p < blurred.length; p++) {
+    const v = blurred[p] * 255;
+    himg.data[p * 4] = himg.data[p * 4 + 1] = himg.data[p * 4 + 2] = v; himg.data[p * 4 + 3] = 255;
+  }
+  hx.putImageData(himg, 0, 0);
+  const heightTex = new THREE.CanvasTexture(hc);
+
+  // Sobel -> tangent-space normal map
+  const nc = document.createElement('canvas'); nc.width = w; nc.height = h;
+  const nx = nc.getContext('2d'); const nimg = nx.createImageData(w, h);
+  const bat = (xx, yy) => blurred[Math.min(h - 1, Math.max(0, yy)) * w + Math.min(w - 1, Math.max(0, xx))];
+  const S = 3.0;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const dx = (bat(x + 1, y) - bat(x - 1, y)) * S;
+    const dy = (bat(x, y + 1) - bat(x, y - 1)) * S;
+    let nX = -dx, nY = -dy, nZ = 1; const len = Math.hypot(nX, nY, nZ) || 1;
+    const o = (y * w + x) * 4;
+    nimg.data[o] = (nX / len * 0.5 + 0.5) * 255;
+    nimg.data[o + 1] = (nY / len * 0.5 + 0.5) * 255;
+    nimg.data[o + 2] = (nZ / len * 0.5 + 0.5) * 255;
+    nimg.data[o + 3] = 255;
+  }
+  nx.putImageData(nimg, 0, 0);
+  const normalTex = new THREE.CanvasTexture(nc);  // keep linear (not sRGB)
+  return { heightTex, normalTex };
 }
 
 function makeMuralTexture() {
@@ -290,7 +354,7 @@ function makeMuralTexture() {
         const cv = drawMuralCanvas();
         const t = new THREE.CanvasTexture(cv);
         t.colorSpace = THREE.SRGBColorSpace;
-        resolve({ tex: t, relief: reliefFromCanvas(cv), real: false });
+        resolve({ tex: t, relief: buildReliefMaps(cv), real: false });
         return;
       }
       const img = new Image();
@@ -299,7 +363,7 @@ function makeMuralTexture() {
         const cv = buildWallCanvas(img);
         const t = new THREE.CanvasTexture(cv);
         t.colorSpace = THREE.SRGBColorSpace;
-        resolve({ tex: t, relief: reliefFromCanvas(cv), real: true });
+        resolve({ tex: t, relief: buildReliefMaps(cv), real: true });
       };
       img.onerror = () => { i++; tryNext(); };
       img.src = candidates[i];
@@ -310,7 +374,7 @@ function makeMuralTexture() {
 
 let muralMat;
 const { tex: muralTexture, relief: muralRelief, real: muralIsReal } = await makeMuralTexture();
-for (const tex of [muralTexture, muralRelief]) {
+for (const tex of [muralTexture, muralRelief.heightTex, muralRelief.normalTex]) {
   tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
   tex.wrapS = THREE.ClampToEdgeWrapping;
   tex.wrapT = THREE.ClampToEdgeWrapping;
@@ -320,21 +384,24 @@ for (const tex of [muralTexture, muralRelief]) {
   tex.offset.x = 1;
 }
 
+// Tessellated wall so the displacement has vertices to move — real bas-relief.
 const wallGeo = new THREE.CylinderGeometry(
-  CFG.wallRadius, CFG.wallRadius, CFG.wallHeight, 200, 1, true,
+  CFG.wallRadius, CFG.wallRadius, CFG.wallHeight, 512, 256, true,
   Math.PI - CFG.wallArc / 2, CFG.wallArc,   // arc centred on the front (-z)
 );
 muralMat = new THREE.MeshStandardMaterial({
   map: muralTexture,
   side: THREE.BackSide,
-  roughness: 0.86,
-  metalness: 0.05,
+  roughness: 0.9,
+  metalness: 0.0,
   emissive: 0xffffff,
   emissiveMap: muralTexture,
-  emissiveIntensity: muralIsReal ? 0.07 : 0.3,
-  envMapIntensity: 0.45,
-  bumpMap: muralRelief,          // subtle 3D relief on the painted figures
-  bumpScale: muralIsReal ? 0.6 : 0.4,
+  emissiveIntensity: muralIsReal ? 0.05 : 0.28,   // less self-glow so relief shades
+  envMapIntensity: 0.7,
+  normalMap: muralRelief.normalTex,
+  normalScale: new THREE.Vector2(2.4, 2.4),
+  displacementMap: muralRelief.heightTex,
+  displacementScale: muralIsReal ? 1.1 : 0.6,     // figures physically push toward the room
 });
 const wall = new THREE.Mesh(wallGeo, muralMat);
 wall.position.y = CFG.wallHeight / 2;
@@ -403,6 +470,7 @@ function makeMarbleMaps() {
 const marbleMaps = makeMarbleMaps();
 const floorRough = makeNoiseTexture(512, 150, 90);
 floorRough.repeat.set(6, 6);
+const floorNormal = microNormal.clone(); floorNormal.needsUpdate = true; floorNormal.repeat.set(8, 8);
 const marbleMat = new THREE.MeshPhysicalMaterial({
   map: marbleMaps.color,
   color: 0xcbb98a,
@@ -411,8 +479,8 @@ const marbleMat = new THREE.MeshPhysicalMaterial({
   metalness: 0.0,
   clearcoat: 1.0,
   clearcoatRoughness: 0.28,
-  bumpMap: floorRough,
-  bumpScale: 0.015,
+  normalMap: floorNormal,
+  normalScale: new THREE.Vector2(0.12, 0.12),
   envMapIntensity: 0.32,
   transparent: true,
   opacity: 0.8,            // lets the mirror beneath show through
@@ -505,19 +573,30 @@ for (let i = 0; i < 14; i++) {
   spotDots.push(d);
 }
 
-// physical light from the ring so it actually illuminates the room (soft, not a hotspot)
-const ringLight = new THREE.PointLight(0xffe1ab, 5, 70, 1.4);
+// Lighting is HDRI(IBL)-dominant. These few lights are physically grounded
+// (inverse-square decay=2) and purposeful: a ring fixture, a hero key with soft
+// shadows, grazing wall lights to reveal the relief, and a cool rim.
+const ringLight = new THREE.PointLight(0xffe1ab, 55, 70, 2);
 ringLight.position.set(0, CFG.ceilingY - 0.4, 0);
 scene.add(ringLight);
 
-const fillLight = new THREE.HemisphereLight(0xfff2d8, 0x3a2f18, 0.28);
+// minimal flat fill — HDRI carries the ambient, so keep these low
+const fillLight = new THREE.HemisphereLight(0xfff2d8, 0x342a16, 0.12);
 scene.add(fillLight);
-const ambient = new THREE.AmbientLight(0xfff0d6, 0.22);
-scene.add(ambient);
 
-// Real key light over the hero — actual soft-shadow casting + physical falloff,
-// so light believably interacts with the product/pedestal instead of looking flat.
-const keyLight = new THREE.SpotLight(0xfff1d2, 260, 26, Math.PI / 7, 0.7, 1.6);
+// grazing wall washers — raking light down the mural so the bas-relief casts
+// tiny self-shadows and reads as carved form, not a flat print
+const wallWashL = new THREE.SpotLight(0xffe9c6, 200, 34, Math.PI / 5, 0.92, 2);
+wallWashL.position.set(-7, CFG.ceilingY - 0.6, -2);
+wallWashL.target.position.set(-11, 2.5, -CFG.wallRadius + 2);
+scene.add(wallWashL); scene.add(wallWashL.target);
+const wallWashR = new THREE.SpotLight(0xffe9c6, 200, 34, Math.PI / 5, 0.92, 2);
+wallWashR.position.set(7, CFG.ceilingY - 0.6, -2);
+wallWashR.target.position.set(11, 2.5, -CFG.wallRadius + 2);
+scene.add(wallWashR); scene.add(wallWashR.target);
+
+// Real key light over the hero — soft-shadow casting + physical falloff (decay=2).
+const keyLight = new THREE.SpotLight(0xfff1d2, 720, 26, Math.PI / 7, 0.7, 2);
 keyLight.position.set(1.6, 8.4, 6.2);
 keyLight.castShadow = true;
 keyLight.shadow.mapSize.set(2048, 2048);
@@ -533,14 +612,14 @@ scene.add(keyTarget);
 keyLight.target = keyTarget;
 
 // A cooler rim/back light for shape separation (no shadow, cheap).
-const rimLight = new THREE.SpotLight(0xbfd0e6, 40, 30, Math.PI / 6, 0.9, 1.5);
+const rimLight = new THREE.SpotLight(0xbfd0e6, 120, 30, Math.PI / 6, 0.9, 2);
 rimLight.position.set(-6, 6, -6);
 scene.add(rimLight);
 
 /* -------------------------------------------------------------------------- */
 /*  Mouse-follow spotlight sweeping the wall/floor                              */
 /* -------------------------------------------------------------------------- */
-const followSpot = new THREE.SpotLight(0xffe8c4, 60, 55, Math.PI / 7, 0.95, 1.1);
+const followSpot = new THREE.SpotLight(0xffe8c4, 140, 55, Math.PI / 7, 0.95, 2);
 followSpot.position.set(0, 7.5, 3);
 followSpot.castShadow = false; // soft accent light only — no hard shadow frustum artifacts
 const followTarget = new THREE.Object3D();
@@ -558,7 +637,7 @@ scene.add(parallaxGroup);
 const interactive = [];
 // Hero product dead-centre as the focal point; two quieter accents set back.
 const pedestalDefs = [
-  { x: 0.0, z: 4.2, label: 'Belts', color: 0xd8b45e, hero: true, scale: 1.6 },
+  { x: 0.0, z: 4.2, label: 'Belts', color: 0xd8b45e, hero: true, scale: 1.72 },
   { x: -10.5, z: -1.2, label: 'Bags', color: 0xc9a24c, hero: false, scale: 0.9 },
   { x: 10.5, z: -1.2, label: 'Shoes', color: 0xbf9846, hero: false, scale: 0.9 },
 ];
@@ -656,9 +735,11 @@ for (const def of pedestalDefs) {
 
   // premium polished onyx pedestal — veined, micro-imperfect, softly reflective
   const stoneNoise = microNoise.clone(); stoneNoise.needsUpdate = true; stoneNoise.repeat.set(2, 3);
+  const stoneNormal = microNormal.clone(); stoneNormal.needsUpdate = true; stoneNormal.repeat.set(2, 3);
   const colMat = new THREE.MeshPhysicalMaterial({
     color: 0x17120b, map: onyxMap, roughness: 0.42, roughnessMap: stoneNoise, metalness: 0.0,
-    clearcoat: 0.7, clearcoatRoughness: 0.22, bumpMap: stoneNoise, bumpScale: 0.006,
+    clearcoat: 0.7, clearcoatRoughness: 0.22,
+    normalMap: stoneNormal, normalScale: new THREE.Vector2(0.25, 0.25),
     envMapIntensity: 1.05,
   });
   const column = new THREE.Mesh(pedestalGeo, colMat);
@@ -679,9 +760,11 @@ for (const def of pedestalDefs) {
 
   // real gold product — high metalness, subtle roughness variation (not mirror plastic)
   const goldNoise = microNoise.clone(); goldNoise.needsUpdate = true; goldNoise.repeat.set(3, 3);
+  const goldNormal = microNormal.clone(); goldNormal.needsUpdate = true; goldNormal.repeat.set(4, 4);
   const objMat = new THREE.MeshPhysicalMaterial({
     color: def.color, roughness: 0.24, roughnessMap: goldNoise, metalness: 1.0,
     clearcoat: 0.35, clearcoatRoughness: 0.2, envMapIntensity: 1.6,
+    normalMap: goldNormal, normalScale: new THREE.Vector2(0.08, 0.08),
   });
   const r = def.hero ? 0.27 : 0.2;
   const obj = new THREE.Mesh(new THREE.TorusKnotGeometry(r, r * 0.34, 260, 40), objMat);
@@ -693,7 +776,7 @@ for (const def of pedestalDefs) {
   group.userData = {
     label: def.label,
     plate, obj, plateMat, objMat, restY,
-    baseEmissive: 0.35,
+    baseEmissive: 0.26,
     hover: 0,          // eased 0..1 hover amount
     click: 0,          // decaying click pulse
     spin: Math.random() * Math.PI,
@@ -808,7 +891,7 @@ composer.addPass(new RenderPass(scene, camera));
 
 // Depth-of-field: focus on the hero, let the mural fall softly out of focus.
 const bokeh = new BokehPass(scene, camera, {
-  focus: 6.5, aperture: 0.0012, maxblur: 0.0042,
+  focus: 9.5, aperture: 0.0016, maxblur: 0.0052,
   width: window.innerWidth, height: window.innerHeight,
 });
 composer.addPass(bokeh);
@@ -818,7 +901,55 @@ const bloom = new UnrealBloomPass(
   CFG.bloom.strength, CFG.bloom.radius, CFG.bloom.threshold,
 );
 composer.addPass(bloom);
-composer.addPass(new ShaderPass(GammaCorrectionShader));
+
+// Final cinematic grade: sRGB, warm color grade, vignette, animated film grain,
+// radial edge streak (item 11) + a directional swipe-blur burst (item 12).
+const GradePass = {
+  uniforms: {
+    tDiffuse: { value: null },
+    uTime: { value: 0 },
+    uRes: { value: new THREE.Vector2(1, 1) },
+    uSwipe: { value: 0 },   // -1..1 directional motion-blur burst
+  },
+  vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);} `,
+  fragmentShader: `
+    varying vec2 vUv; uniform sampler2D tDiffuse; uniform float uTime; uniform vec2 uRes; uniform float uSwipe;
+    float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+    void main(){
+      vec2 uv = vUv;
+      vec2 c = uv - 0.5;
+      // (11) radial streak toward the edges — the "next environment" peeks blur outward
+      float edge = smoothstep(0.30, 0.66, abs(c.x));
+      vec3 col = vec3(0.0); float wsum = 0.0;
+      const int N = 12;
+      for(int i=0;i<N;i++){
+        float f = float(i)/float(N-1) - 0.5;
+        // radial (edge) + horizontal swipe streak — smooth, weighted taps
+        vec2 off = c * f * 0.05 * edge + vec2(uSwipe * f * 0.03, 0.0);
+        float w = 1.0 - abs(f);
+        col += texture2D(tDiffuse, uv + off).rgb * w; wsum += w;
+      }
+      col /= wsum;
+      // warm filmic-ish color grade
+      col = pow(col, vec3(0.96));
+      col *= vec3(1.045, 1.005, 0.955);
+      float l = dot(col, vec3(0.299,0.587,0.114));
+      col = mix(vec3(l), col, 1.04);                 // gentle saturation
+      // vignette
+      float vig = smoothstep(1.0, 0.5, length(c*vec2(1.0,1.15)));
+      col *= mix(0.9, 1.0, vig);
+      // film grain
+      float g = hash(uv*uRes*0.5 + uTime) - 0.5;
+      col += g * 0.028;
+      // linear -> sRGB
+      col = pow(clamp(col,0.0,1.0), vec3(1.0/2.2));
+      gl_FragColor = vec4(col, 1.0);
+    }
+  `,
+};
+const gradePass = new ShaderPass(GradePass);
+gradePass.uniforms.uRes.value.set(window.innerWidth, window.innerHeight);
+composer.addPass(gradePass);
 
 /* -------------------------------------------------------------------------- */
 /*  Pointer / interaction state                                                 */
@@ -876,6 +1007,55 @@ window.addEventListener('pointerdown', () => (lastInteract = performance.now()))
 window.addEventListener('click', onClick);
 
 /* -------------------------------------------------------------------------- */
+/*  Swipe between products (item 12): horizontal zoom/motion-blur pull          */
+/* -------------------------------------------------------------------------- */
+const swipe = { value: 0 };
+const PRODUCTS = [
+  { label: 'Bags', color: 0xcaa24a },
+  { label: 'Belts', color: 0xd8b45e },
+  { label: 'Shoes', color: 0xbf9846 },
+];
+let activeProduct = 1;
+const heroGroup = interactive[0];
+function selectProduct(idx, dir) {
+  idx = (idx + PRODUCTS.length) % PRODUCTS.length;
+  activeProduct = idx;
+  const p = PRODUCTS[idx];
+  heroGroup.userData.label = p.label;
+  heroGroup.userData.objMat.color.setHex(p.color);
+  heroGroup.userData.click = 1.0;                 // glow pop
+  heroGroup.userData.spin += dir * 1.6;           // kick the spin in swipe direction
+  swipe.value = THREE.MathUtils.clamp(dir * 0.7, -1, 1); // motion-blur burst
+  lastInteract = performance.now();
+  document.querySelectorAll('.nav-link[data-product]').forEach((el) => {
+    el.classList.toggle('is-active', el.dataset.product === p.label);
+  });
+}
+function cycleProduct(dir) { selectProduct(activeProduct + dir, dir); }
+
+// nav links drive product selection
+document.querySelectorAll('.nav-link[data-product]').forEach((el) => {
+  el.addEventListener('click', (e) => {
+    e.preventDefault();
+    const idx = PRODUCTS.findIndex((p) => p.label === el.dataset.product);
+    selectProduct(idx, idx >= activeProduct ? 1 : -1);
+  });
+});
+// keyboard arrows
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowRight') cycleProduct(1);
+  else if (e.key === 'ArrowLeft') cycleProduct(-1);
+});
+// horizontal drag / touch swipe
+let dragX = null;
+window.addEventListener('pointerdown', (e) => { dragX = e.clientX; });
+window.addEventListener('pointerup', (e) => {
+  if (dragX === null) return;
+  const dx = e.clientX - dragX; dragX = null;
+  if (Math.abs(dx) > 90) cycleProduct(dx < 0 ? 1 : -1);
+});
+
+/* -------------------------------------------------------------------------- */
 /*  Resize                                                                      */
 /* -------------------------------------------------------------------------- */
 function onResize() {
@@ -884,6 +1064,7 @@ function onResize() {
   renderer.setSize(window.innerWidth, window.innerHeight);
   composer.setSize(window.innerWidth, window.innerHeight);
   bokeh.setSize(window.innerWidth, window.innerHeight);
+  gradePass.uniforms.uRes.value.set(window.innerWidth, window.innerHeight);
 }
 window.addEventListener('resize', onResize);
 
@@ -952,7 +1133,8 @@ function animate() {
 
   // (4) very slow "breathing" parallax on the painting itself
   muralTexture.offset.x = muralOffsetBaseX + Math.sin(t * 0.05) * 0.0016;
-  muralRelief.offset.x = muralTexture.offset.x;
+  muralRelief.heightTex.offset.x = muralTexture.offset.x;
+  muralRelief.normalTex.offset.x = muralTexture.offset.x;
 
   // mouse-follow spotlight: project pointer onto the wall, then glide (frame-rate independent)
   raycaster.setFromCamera(pointerSmooth, camera);
@@ -980,7 +1162,7 @@ function animate() {
   }
 
   // (6) idle ambient floor pool — breathes on its own, independent of the mouse
-  floorPool.material.opacity = 0.32 + Math.sin(t * 0.5) * 0.08;
+  floorPool.material.opacity = 0.22 + Math.sin(t * 0.5) * 0.06;
   floorPool.scale.setScalar(1 + Math.sin(t * 0.35) * 0.04);
 
   // (8/9) drifting dust + slowly rotating light shafts
@@ -1038,6 +1220,11 @@ function animate() {
     d.obj.rotation.y = d.spin;
     d.obj.position.y = d.restY + Math.sin(t * 1.2 + d.spin) * 0.025 + d.hover * 0.06;
   }
+
+  // post grade: advance grain + decay any swipe-blur burst (item 12)
+  gradePass.uniforms.uTime.value = t;
+  swipe.value = damp(swipe.value, 0, 3.0, dt);
+  gradePass.uniforms.uSwipe.value = swipe.value;
 
   composer.render();
 

@@ -142,6 +142,8 @@ body.is-ready .chrome { opacity: 1; transform: translateY(0); }
 }
 .nav-link:hover { opacity: 1; color: var(--gold-soft); }
 .nav-link:hover::after { transform: scaleX(1); }
+.nav-link.is-active { opacity: 1; color: var(--gold-soft); }
+.nav-link.is-active::after { transform: scaleX(1); }
 .nav-link--muted { opacity: 0.5; }
 
 .chrome--bottom {
