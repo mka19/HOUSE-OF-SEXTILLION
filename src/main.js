@@ -6,6 +6,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { GammaCorrectionShader } from 'three/examples/jsm/shaders/GammaCorrectionShader.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import hdriUrl from '@pmndrs/assets/hdri/lobby.exr.js';
 import { drawMuralCanvas } from './mural.js';
 
@@ -63,15 +64,31 @@ manager.onProgress = (_u, loaded, total) => {
 const pmrem = new THREE.PMREMGenerator(renderer);
 pmrem.compileEquirectangularShader();
 
-new EXRLoader(manager).load(hdriUrl, (texture) => {
-  texture.mapping = THREE.EquirectangularReflectionMapping;
-  const envMap = pmrem.fromEquirectangular(texture).texture;
-  scene.environment = envMap;
+// Procedural interior environment — used if the HDRI can't load (e.g. a strict
+// sandbox CSP blocking the data-URI loader). No assets, so it always works.
+function useProceduralEnv() {
+  const env = new RoomEnvironment();
+  scene.environment = pmrem.fromScene(env, 0.04).texture;
   scene.environmentIntensity = CFG.envIntensity;
-  scene.environmentRotation = new THREE.Euler(0, Math.PI, 0); // push the HDRI's bright window behind camera
-  texture.dispose();
-  pmrem.dispose();
-});
+  env.dispose?.();
+}
+try {
+  new EXRLoader(manager).load(
+    hdriUrl,
+    (texture) => {
+      texture.mapping = THREE.EquirectangularReflectionMapping;
+      const envMap = pmrem.fromEquirectangular(texture).texture;
+      scene.environment = envMap;
+      scene.environmentIntensity = CFG.envIntensity;
+      scene.environmentRotation = new THREE.Euler(0, Math.PI, 0); // push the HDRI's bright window behind camera
+      texture.dispose();
+    },
+    undefined,
+    () => useProceduralEnv(),
+  );
+} catch (e) {
+  useProceduralEnv();
+}
 
 // Warm graded background behind the architecture.
 {
@@ -112,8 +129,9 @@ function textureFromImage(img) {
 
 function makeMuralTexture() {
   return new Promise((resolve) => {
-    // Prefer the real reference photo; fall back to the procedural recreation.
-    const candidates = ['./MURAL.jpeg', './textures/mural.jpg'];
+    // Prefer an inlined data URI (single-file/artifact build), then the real
+    // reference photo, then the procedural recreation.
+    const candidates = [window.__MURAL_DATA_URI, './MURAL.jpeg', './textures/mural.jpg'].filter(Boolean);
     let i = 0;
     const tryNext = () => {
       if (i >= candidates.length) {
