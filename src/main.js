@@ -49,6 +49,55 @@ const lookTarget = new THREE.Vector3(0, 3.7, -CFG.wallRadius);
 const LOOK_BASE_Y = 3.7;
 
 /* -------------------------------------------------------------------------- */
+/*  Shared procedural textures — micro-imperfection so nothing reads perfectly  */
+/*  flat/clean, plus soft sprites for atmosphere.                               */
+/* -------------------------------------------------------------------------- */
+function makeNoiseTexture(size = 512, base = 190, spread = 60) {
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const x = c.getContext('2d');
+  const img = x.createImageData(size, size);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const v = base + Math.random() * spread;
+    img.data[i] = img.data[i + 1] = img.data[i + 2] = v; img.data[i + 3] = 255;
+  }
+  x.putImageData(img, 0, 0);
+  // low-frequency blotches for macro variation (smudges, wear)
+  for (let k = 0; k < 42; k++) {
+    x.globalAlpha = 0.04 + Math.random() * 0.07;
+    x.fillStyle = Math.random() > 0.5 ? '#ffffff' : '#000000';
+    x.beginPath();
+    x.arc(Math.random() * size, Math.random() * size, size * (0.04 + Math.random() * 0.22), 0, Math.PI * 2);
+    x.fill();
+  }
+  x.globalAlpha = 1;
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+function makeSoftSprite(rgb = '255,238,200') {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const x = c.getContext('2d');
+  const g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+  g.addColorStop(0, `rgba(${rgb},1)`);
+  g.addColorStop(0.35, `rgba(${rgb},0.45)`);
+  g.addColorStop(1, `rgba(${rgb},0)`);
+  x.fillStyle = g; x.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(c);
+}
+function makeRadialTexture(stops) {
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const x = c.getContext('2d');
+  const g = x.createRadialGradient(128, 128, 0, 128, 128, 128);
+  for (const [o, col] of stops) g.addColorStop(o, col);
+  x.fillStyle = g; x.fillRect(0, 0, 256, 256);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+const microNoise = makeNoiseTexture(512);      // roughness micro-variation
+const softSprite = makeSoftSprite();           // dust / glow particles
+
+/* -------------------------------------------------------------------------- */
 /*  Loading manager -> loader bar                                               */
 /* -------------------------------------------------------------------------- */
 const manager = new THREE.LoadingManager();
@@ -113,36 +162,141 @@ try {
 // a room-inside-a-room. Fractions are of the source image (1536x1024).
 const MURAL_CROP = { top: 0.185, bottom: 0.795, left: 0.0, right: 1.0 };
 
-function textureFromImage(img) {
+// A cooler "next environment" glimpsed through haze — painterly & low-contrast,
+// so it reads as another room beyond, not a flat vector shape.
+function drawNextScene(ctx, x0, w, h, flip) {
+  ctx.save();
+  ctx.translate(x0, 0);
+  if (flip) { ctx.translate(w, 0); ctx.scale(-1, 1); }
+  const sky = ctx.createLinearGradient(0, 0, 0, h);
+  sky.addColorStop(0.0, '#5b6660');   // muted grey-jade, desaturated
+  sky.addColorStop(0.45, '#8b968b');
+  sky.addColorStop(0.72, '#b9bfae');
+  sky.addColorStop(1.0, '#aab0a0');
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, w, h);
+  // hazy receding ridges — each drawn as a few offset low-alpha passes (soft blur)
+  const ridge = (baseY, amp, col, alpha) => {
+    for (let pass = 0; pass < 3; pass++) {
+      ctx.globalAlpha = alpha * (pass === 1 ? 1 : 0.5);
+      ctx.beginPath(); ctx.moveTo(0, h); ctx.lineTo(0, baseY + pass * 3);
+      for (let i = 0; i <= 14; i++) {
+        const x = (i / 14) * w;
+        const y = baseY + pass * 3 - (Math.sin(i * 1.1 + baseY) * 0.4 + 0.5) * amp;
+        ctx.lineTo(x, y);
+      }
+      ctx.lineTo(w, h); ctx.closePath(); ctx.fillStyle = col; ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  };
+  ridge(h * 0.50, h * 0.09, '#9ba597', 0.55);
+  ridge(h * 0.60, h * 0.12, '#818d80', 0.6);
+  ridge(h * 0.73, h * 0.13, '#69756a', 0.65);
+  ridge(h * 0.86, h * 0.11, '#57625a', 0.7);
+  // soft misty pagoda hint (no hard rectangle)
+  ctx.globalAlpha = 0.4;
+  ctx.fillStyle = '#5a655d';
+  ctx.beginPath();
+  ctx.moveTo(w * 0.6, h * 0.56); ctx.lineTo(w * 0.63, h * 0.4);
+  ctx.lineTo(w * 0.66, h * 0.56); ctx.closePath(); ctx.fill();
+  ctx.globalAlpha = 1;
+  // heavy atmospheric haze so it melts into distance
+  const haze = ctx.createLinearGradient(0, 0, 0, h);
+  haze.addColorStop(0, 'rgba(190,196,184,0.5)');
+  haze.addColorStop(0.55, 'rgba(190,196,184,0.12)');
+  haze.addColorStop(1, 'rgba(180,186,172,0.3)');
+  ctx.fillStyle = haze; ctx.fillRect(0, 0, w, h);
+  ctx.restore();
+}
+
+// Build the wall texture: real mural in the centre at TRUE aspect (no stretch),
+// with the next-environment scenes filling the side arcs, softly blended.
+function buildWallCanvas(img) {
   const sx = img.width * MURAL_CROP.left;
   const sy = img.height * MURAL_CROP.top;
   const sw = img.width * (MURAL_CROP.right - MURAL_CROP.left);
   const sh = img.height * (MURAL_CROP.bottom - MURAL_CROP.top);
+
+  const Hc = 900;
+  const compAspect = (CFG.wallRadius * CFG.wallArc) / CFG.wallHeight; // arc length : height
+  const Wc = Math.round(Hc * compAspect);
+  const muralW = Math.round(Hc * (sw / sh));                          // mural at its native aspect
+  const mx = Math.round((Wc - muralW) / 2);
+
   const c = document.createElement('canvas');
-  c.width = Math.round(sw);
-  c.height = Math.round(sh);
-  c.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, c.width, c.height);
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  return t;
+  c.width = Wc; c.height = Hc;
+  const x = c.getContext('2d');
+
+  // side scenes first
+  drawNextScene(x, 0, mx + 4, Hc, false);
+  drawNextScene(x, mx + muralW - 4, Wc - (mx + muralW) + 4, Hc, true);
+  // real mural, centred at correct aspect
+  x.drawImage(img, sx, sy, sw, sh, mx, 0, muralW, Hc);
+
+  // wide soft crossfade at each seam + a whisper of gilded moulding, so the
+  // next-scene melts into the mural on the curve rather than hard-cutting
+  for (const seam of [mx, mx + muralW]) {
+    const bw = 150;
+    const blend = x.createLinearGradient(seam - bw, 0, seam + bw, 0);
+    blend.addColorStop(0, 'rgba(150,156,144,0.0)');
+    blend.addColorStop(0.5, 'rgba(140,146,132,0.34)');
+    blend.addColorStop(1, 'rgba(150,156,144,0.0)');
+    x.fillStyle = blend; x.fillRect(seam - bw, 0, bw * 2, Hc);
+    const g = x.createLinearGradient(seam - 6, 0, seam + 6, 0);
+    g.addColorStop(0, 'rgba(60,44,18,0)');
+    g.addColorStop(0.5, 'rgba(228,208,150,0.5)');
+    g.addColorStop(1, 'rgba(60,44,18,0)');
+    x.fillStyle = g; x.fillRect(seam - 6, 0, 12, Hc);
+  }
+  // atmospheric haze fading the far edges into the curve
+  const edge = x.createLinearGradient(0, 0, Wc, 0);
+  edge.addColorStop(0, 'rgba(175,180,168,0.5)');
+  edge.addColorStop(0.12, 'rgba(175,180,168,0)');
+  edge.addColorStop(0.88, 'rgba(175,180,168,0)');
+  edge.addColorStop(1, 'rgba(175,180,168,0.5)');
+  x.fillStyle = edge; x.fillRect(0, 0, Wc, Hc);
+  return c;
+}
+
+// A height/relief map derived from the painting's luminance so the figures
+// (panther, toucan, rabbit, snake) and details catch light in 3D, not flat.
+function reliefFromCanvas(src) {
+  const c = document.createElement('canvas');
+  const scale = 0.5;
+  c.width = Math.round(src.width * scale); c.height = Math.round(src.height * scale);
+  const x = c.getContext('2d');
+  x.drawImage(src, 0, 0, c.width, c.height);
+  const img = x.getImageData(0, 0, c.width, c.height);
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    // dark painted subjects -> raised relief; bright sky -> flat
+    const lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+    const h = 255 - lum;
+    d[i] = d[i + 1] = d[i + 2] = h; d[i + 3] = 255;
+  }
+  x.putImageData(img, 0, 0);
+  return new THREE.CanvasTexture(c);
 }
 
 function makeMuralTexture() {
   return new Promise((resolve) => {
-    // Prefer an inlined data URI (single-file/artifact build), then the real
-    // reference photo, then the procedural recreation.
     const candidates = [window.__MURAL_DATA_URI, './MURAL.jpeg', './textures/mural.jpg'].filter(Boolean);
     let i = 0;
     const tryNext = () => {
       if (i >= candidates.length) {
-        const t = new THREE.CanvasTexture(drawMuralCanvas());
+        const cv = drawMuralCanvas();
+        const t = new THREE.CanvasTexture(cv);
         t.colorSpace = THREE.SRGBColorSpace;
-        resolve({ tex: t, real: false });
+        resolve({ tex: t, relief: reliefFromCanvas(cv), real: false });
         return;
       }
       const img = new Image();
       img.crossOrigin = 'anonymous';
-      img.onload = () => resolve({ tex: textureFromImage(img), real: true });
+      img.onload = () => {
+        const cv = buildWallCanvas(img);
+        const t = new THREE.CanvasTexture(cv);
+        t.colorSpace = THREE.SRGBColorSpace;
+        resolve({ tex: t, relief: reliefFromCanvas(cv), real: true });
+      };
       img.onerror = () => { i++; tryNext(); };
       img.src = candidates[i];
     };
@@ -151,34 +305,39 @@ function makeMuralTexture() {
 }
 
 let muralMat;
-const { tex: muralTexture, real: muralIsReal } = await makeMuralTexture();
-muralTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
-muralTexture.wrapS = THREE.ClampToEdgeWrapping;
-muralTexture.wrapT = THREE.ClampToEdgeWrapping;
-// the cylinder's inner (BackSide) faces mirror U — flip it so the panorama
-// reads in its true left-to-right order (panther left, snake/tree right).
-muralTexture.repeat.x = -1;
-muralTexture.offset.x = 1;
+const { tex: muralTexture, relief: muralRelief, real: muralIsReal } = await makeMuralTexture();
+for (const tex of [muralTexture, muralRelief]) {
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  tex.wrapS = THREE.ClampToEdgeWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  // the cylinder's inner (BackSide) faces mirror U — flip so the panorama reads
+  // in true left-to-right order (panther left, snake/tree right).
+  tex.repeat.x = -1;
+  tex.offset.x = 1;
+}
 
 const wallGeo = new THREE.CylinderGeometry(
-  CFG.wallRadius, CFG.wallRadius, CFG.wallHeight, 160, 1, true,
+  CFG.wallRadius, CFG.wallRadius, CFG.wallHeight, 200, 1, true,
   Math.PI - CFG.wallArc / 2, CFG.wallArc,   // arc centred on the front (-z)
 );
 muralMat = new THREE.MeshStandardMaterial({
   map: muralTexture,
   side: THREE.BackSide,
-  roughness: 0.92,
-  metalness: 0.04,
+  roughness: 0.86,
+  metalness: 0.05,
   emissive: 0xffffff,
   emissiveMap: muralTexture,
-  // the real photo already carries its own light, so it needs little self-glow
   emissiveIntensity: muralIsReal ? 0.07 : 0.3,
-  envMapIntensity: 0.35,
+  envMapIntensity: 0.45,
+  bumpMap: muralRelief,          // subtle 3D relief on the painted figures
+  bumpScale: muralIsReal ? 0.6 : 0.4,
 });
 const wall = new THREE.Mesh(wallGeo, muralMat);
 wall.position.y = CFG.wallHeight / 2;
 wall.receiveShadow = true;
 scene.add(wall);
+// base UV offset (animated very slowly for a quiet "breathing" parallax)
+const muralOffsetBaseX = muralTexture.offset.x;
 
 /* -------------------------------------------------------------------------- */
 /*  Reflective marble floor  (real mirror of the mural + PBR marble overlay)    */
@@ -238,14 +397,19 @@ function makeMarbleMaps() {
   return { color: tex, rough };
 }
 const marbleMaps = makeMarbleMaps();
+const floorRough = makeNoiseTexture(512, 150, 90);
+floorRough.repeat.set(6, 6);
 const marbleMat = new THREE.MeshPhysicalMaterial({
   map: marbleMaps.color,
   color: 0xcbb98a,
-  roughness: 0.36,
+  roughness: 0.34,
+  roughnessMap: floorRough,       // micro-variation so reflections aren't a perfect mirror
   metalness: 0.0,
   clearcoat: 1.0,
-  clearcoatRoughness: 0.3,
-  envMapIntensity: 0.3,
+  clearcoatRoughness: 0.28,
+  bumpMap: floorRough,
+  bumpScale: 0.015,
+  envMapIntensity: 0.32,
   transparent: true,
   opacity: 0.8,            // lets the mirror beneath show through
   depthWrite: false,
@@ -255,6 +419,30 @@ marble.rotation.x = -Math.PI / 2;
 marble.position.y = 0.012;
 marble.receiveShadow = true;
 scene.add(marble);
+
+// Idle ambient glow pooling on the floor under the ring — alive without the mouse.
+const floorPool = new THREE.Mesh(
+  new THREE.CircleGeometry(10, 96),
+  new THREE.MeshBasicMaterial({
+    map: makeRadialTexture([[0, 'rgba(255,231,178,0.5)'], [0.4, 'rgba(240,205,140,0.18)'], [1, 'rgba(240,205,140,0)']]),
+    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+  }),
+);
+floorPool.rotation.x = -Math.PI / 2;
+floorPool.position.y = 0.02;
+scene.add(floorPool);
+
+// Soft ambient-occlusion darkening where the wall meets the floor (fake AO contact).
+const wallAO = new THREE.Mesh(
+  new THREE.CircleGeometry(CFG.wallRadius, 128),
+  new THREE.MeshBasicMaterial({
+    map: makeRadialTexture([[0, 'rgba(0,0,0,0)'], [0.72, 'rgba(0,0,0,0)'], [0.9, 'rgba(18,12,5,0.3)'], [1, 'rgba(12,8,3,0.5)']]),
+    transparent: true, depthWrite: false,
+  }),
+);
+wallAO.rotation.x = -Math.PI / 2;
+wallAO.position.y = 0.016;
+scene.add(wallAO);
 
 /* -------------------------------------------------------------------------- */
 /*  Recessed ceiling + pulsing ring light                                       */
@@ -392,24 +580,60 @@ const contactShadowTex = (() => {
 })();
 const contactShadowGeo = new THREE.PlaneGeometry(1, 1);
 
+// Black onyx with faint warm-gold veining, so the pedestal isn't a flat CG black.
+const onyxMap = (() => {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 512;
+  const x = c.getContext('2d');
+  x.fillStyle = '#17120b'; x.fillRect(0, 0, 512, 512);
+  // cloudy tonal variation
+  for (let i = 0; i < 30; i++) {
+    x.globalAlpha = 0.06;
+    x.fillStyle = Math.random() > 0.5 ? '#2a2013' : '#0a0806';
+    x.beginPath(); x.arc(Math.random() * 512, Math.random() * 512, 40 + Math.random() * 120, 0, Math.PI * 2); x.fill();
+  }
+  // thin gold veins
+  x.globalAlpha = 0.5; x.strokeStyle = '#8a6a2e'; x.lineWidth = 1;
+  for (let i = 0; i < 14; i++) {
+    x.beginPath();
+    let px = Math.random() * 512, py = Math.random() * 512;
+    x.moveTo(px, py);
+    for (let s = 0; s < 8; s++) { px += (Math.random() - 0.5) * 120; py += (Math.random() - 0.5) * 120; x.lineTo(px, py); }
+    x.stroke();
+  }
+  x.globalAlpha = 1;
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+})();
+
 for (const def of pedestalDefs) {
   const group = new THREE.Group();
   group.position.set(def.x, 0, def.z);
   group.scale.setScalar(def.scale);
 
-  // grounding contact shadow, laid flat just above the floor
-  const shadow = new THREE.Mesh(
+  // grounding contact shadow — a tight dark core + a wider soft penumbra
+  const shadowCore = new THREE.Mesh(
     contactShadowGeo,
-    new THREE.MeshBasicMaterial({ map: contactShadowTex, transparent: true, depthWrite: false, opacity: 0.9 }),
+    new THREE.MeshBasicMaterial({ map: contactShadowTex, transparent: true, depthWrite: false, opacity: 0.85 }),
   );
-  shadow.rotation.x = -Math.PI / 2;
-  shadow.position.y = 0.02;
-  shadow.scale.setScalar(2.1);
-  group.add(shadow);
+  shadowCore.rotation.x = -Math.PI / 2;
+  shadowCore.position.y = 0.02;
+  shadowCore.scale.setScalar(1.5);
+  group.add(shadowCore);
+  const shadowSoft = shadowCore.clone();
+  shadowSoft.material = shadowCore.material.clone();
+  shadowSoft.material.opacity = 0.4;
+  shadowSoft.position.y = 0.018;
+  shadowSoft.scale.setScalar(2.7);
+  group.add(shadowSoft);
 
-  // softer, more dimensional stone-bronze (less clearcoat -> not plastic)
+  // premium polished onyx pedestal — veined, micro-imperfect, softly reflective
+  const stoneNoise = microNoise.clone(); stoneNoise.needsUpdate = true; stoneNoise.repeat.set(2, 3);
   const colMat = new THREE.MeshPhysicalMaterial({
-    color: 0x241d15, roughness: 0.52, metalness: 0.35, clearcoat: 0.25, clearcoatRoughness: 0.4, envMapIntensity: 0.8,
+    color: 0x17120b, map: onyxMap, roughness: 0.42, roughnessMap: stoneNoise, metalness: 0.0,
+    clearcoat: 0.7, clearcoatRoughness: 0.22, bumpMap: stoneNoise, bumpScale: 0.006,
+    envMapIntensity: 1.05,
   });
   const column = new THREE.Mesh(pedestalGeo, colMat);
   column.castShadow = true;
@@ -418,7 +642,8 @@ for (const def of pedestalDefs) {
 
   // glowing top plate — the interactive target
   const plateMat = new THREE.MeshStandardMaterial({
-    color: 0xf3dfa8, emissive: 0xc79a45, emissiveIntensity: 0.35, roughness: 0.3, metalness: 0.9,
+    color: 0xf3dfa8, emissive: 0xc79a45, emissiveIntensity: 0.35, roughness: 0.28, metalness: 0.95,
+    roughnessMap: microNoise,
   });
   const plate = new THREE.Mesh(plateGeo, plateMat);
   plate.position.y = 1.5;
@@ -426,12 +651,14 @@ for (const def of pedestalDefs) {
   plate.receiveShadow = true;
   group.add(plate);
 
-  // gilded product form, centred on the plate; softer metal (not mirror-plastic)
+  // real gold product — high metalness, subtle roughness variation (not mirror plastic)
+  const goldNoise = microNoise.clone(); goldNoise.needsUpdate = true; goldNoise.repeat.set(3, 3);
   const objMat = new THREE.MeshPhysicalMaterial({
-    color: def.color, roughness: 0.3, metalness: 0.85, clearcoat: 0.5, clearcoatRoughness: 0.35, envMapIntensity: 1.3,
+    color: def.color, roughness: 0.24, roughnessMap: goldNoise, metalness: 1.0,
+    clearcoat: 0.35, clearcoatRoughness: 0.2, envMapIntensity: 1.6,
   });
   const r = def.hero ? 0.27 : 0.2;
-  const obj = new THREE.Mesh(new THREE.TorusKnotGeometry(r, r * 0.34, 220, 32), objMat);
+  const obj = new THREE.Mesh(new THREE.TorusKnotGeometry(r, r * 0.34, 260, 40), objMat);
   const restY = 1.5 + r + 0.18;
   obj.position.y = restY;
   obj.castShadow = true;
@@ -448,6 +675,104 @@ for (const def of pedestalDefs) {
   interactive.push(group);
   parallaxGroup.add(group);
 }
+
+/* -------------------------------------------------------------------------- */
+/*  Atmosphere — volumetric shafts, drifting dust, ambient life                 */
+/* -------------------------------------------------------------------------- */
+
+// (9) Soft volumetric light shafts falling from the ring through hazy air.
+const shaftTex = (() => {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 256;
+  const x = c.getContext('2d');
+  const g = x.createLinearGradient(0, 0, 0, 256);
+  g.addColorStop(0, 'rgba(255,232,186,0.9)');
+  g.addColorStop(0.5, 'rgba(255,226,170,0.28)');
+  g.addColorStop(1, 'rgba(255,226,170,0)');
+  x.fillStyle = g; x.fillRect(0, 0, 512, 256);
+  // faint vertical striations so it reads as shafts, not a solid cone
+  x.globalCompositeOperation = 'destination-out';
+  for (let i = 0; i < 60; i++) {
+    x.globalAlpha = 0.15 + Math.random() * 0.5;
+    const w = 2 + Math.random() * 10;
+    x.fillRect(Math.random() * 512, 0, w, 256);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = THREE.RepeatWrapping; t.repeat.x = 3;
+  return t;
+})();
+const shafts = new THREE.Mesh(
+  new THREE.CylinderGeometry(5.4, 9.2, CFG.ceilingY - 0.2, 96, 1, true),
+  new THREE.MeshBasicMaterial({
+    map: shaftTex, transparent: true, opacity: 0.05, blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide, depthWrite: false,
+  }),
+);
+shafts.position.y = (CFG.ceilingY - 0.2) / 2;
+scene.add(shafts);
+
+// (8) Slow-drifting gold dust motes floating through the air.
+const DUST = 520;
+const dustGeo = new THREE.BufferGeometry();
+const dustPos = new Float32Array(DUST * 3);
+const dustPhase = new Float32Array(DUST);
+for (let i = 0; i < DUST; i++) {
+  const rad = 2 + Math.random() * (CFG.wallRadius - 3);
+  const a = Math.random() * Math.PI * 2;
+  dustPos[i * 3] = Math.cos(a) * rad;
+  dustPos[i * 3 + 1] = 0.4 + Math.random() * (CFG.ceilingY - 0.8);
+  dustPos[i * 3 + 2] = Math.sin(a) * rad;
+  dustPhase[i] = Math.random() * Math.PI * 2;
+}
+dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
+const dust = new THREE.Points(dustGeo, new THREE.PointsMaterial({
+  size: 0.042, map: softSprite, color: 0xffe6b0, transparent: true, opacity: 0.32,
+  blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
+}));
+scene.add(dust);
+
+// (10) Occasional soft light-shift drifting across the mural — a hint of life.
+const passSprite = new THREE.Mesh(
+  new THREE.PlaneGeometry(7, 9),
+  new THREE.MeshBasicMaterial({
+    map: makeRadialTexture([[0, 'rgba(255,238,200,0.5)'], [0.5, 'rgba(255,232,185,0.15)'], [1, 'rgba(255,232,185,0)']]),
+    transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
+  }),
+);
+passSprite.position.set(0, 4.4, -CFG.wallRadius + 0.5);
+scene.add(passSprite);
+const passState = { next: 8, active: false, t0: 0, dur: 7 };
+
+// (7) Cursor "circuit" decal — thin glowing lines in a small radius, fading out.
+const circuitMat = new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  uniforms: { uTime: { value: 0 }, uStrength: { value: 0 } },
+  vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);} `,
+  fragmentShader: `
+    varying vec2 vUv; uniform float uTime; uniform float uStrength;
+    void main(){
+      vec2 p = vUv*2.0-1.0;
+      float r = length(p);
+      float a = atan(p.y,p.x);
+      float fade = smoothstep(1.0,0.15,r) * uStrength;   // fade to edge + overall strength
+      // concentric rings drifting outward
+      float rings = smoothstep(0.06,0.0,abs(fract(r*4.0 - uTime*0.25)-0.5)-0.44);
+      // radial spokes
+      float spokes = smoothstep(0.06,0.0,abs(fract(a/6.2831*12.0)-0.5)-0.46);
+      // little travelling node
+      float node = smoothstep(0.09,0.0,abs(r-0.55-0.18*sin(uTime*1.3)));
+      float lines = clamp(rings*0.7 + spokes*0.45 + node*0.6, 0.0, 1.0);
+      vec3 col = mix(vec3(0.86,0.72,0.36), vec3(1.0,0.92,0.6), lines);
+      gl_FragColor = vec4(col, lines*fade*0.5);
+    }
+  `,
+});
+const circuit = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 3.6), circuitMat);
+circuit.rotation.x = -Math.PI / 2;
+circuit.position.y = 0.03;
+circuit.visible = false;
+scene.add(circuit);
+const circuitState = { pos: new THREE.Vector3(0, 0.03, 0), strength: 0 };
+const floorPlaneMath = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 
 /* -------------------------------------------------------------------------- */
 /*  Post-processing (bloom + gamma)                                             */
@@ -486,6 +811,7 @@ function onPointerMove(e) {
   pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
   pointer.y = -((e.clientY / window.innerHeight) * 2 - 1);
   lastInteract = performance.now();
+  circuitState.energy = Math.min(1, (circuitState.energy || 0) + 0.22); // feed the cursor circuit glow
 
   // hover test against interactive plates/objects
   raycaster.setFromCamera(pointer, camera);
@@ -554,11 +880,11 @@ function animate() {
   const dt = Math.min(clock.getDelta(), 0.05);
   const t = clock.elapsedTime;
 
-  // two-stage easing -> deep, fluid inertia with no snap
-  pointerEased.x = damp(pointerEased.x, pointer.x, 1.7, dt);
-  pointerEased.y = damp(pointerEased.y, pointer.y, 1.7, dt);
-  pointerSmooth.x = damp(pointerSmooth.x, pointerEased.x, 1.3, dt);
-  pointerSmooth.y = damp(pointerSmooth.y, pointerEased.y, 1.3, dt);
+  // two-stage easing -> deep, fluid inertia with no snap (slower = more premium)
+  pointerEased.x = damp(pointerEased.x, pointer.x, 1.4, dt);
+  pointerEased.y = damp(pointerEased.y, pointer.y, 1.4, dt);
+  pointerSmooth.x = damp(pointerSmooth.x, pointerEased.x, 1.0, dt);
+  pointerSmooth.y = damp(pointerSmooth.y, pointerEased.y, 1.0, dt);
 
   // idle drift: when the user is still, gently sway the camera
   const idle = Math.min(1, (performance.now() - lastInteract) / 3600);
@@ -569,27 +895,80 @@ function animate() {
   const targetY = CFG.camera.base.y + pointerSmooth.y * 0.9 * (1 - idle * 0.35) + driftY * idle + Math.sin(t * 0.42) * 0.05;
   const targetZ = CFG.camera.base.z - Math.abs(pointerSmooth.y) * 0.4;
 
-  camera.position.x = damp(camera.position.x, targetX, 1.3, dt);
-  camera.position.y = damp(camera.position.y, targetY, 1.3, dt);
-  camera.position.z = damp(camera.position.z, targetZ, 1.3, dt);
+  camera.position.x = damp(camera.position.x, targetX, 1.0, dt);
+  camera.position.y = damp(camera.position.y, targetY, 1.0, dt);
+  camera.position.z = damp(camera.position.z, targetZ, 1.0, dt);
 
   // eased look target with a touch of parallax (background moves slower)
-  lookTarget.x = damp(lookTarget.x, pointerSmooth.x * 2.4, 1.2, dt);
-  lookTarget.y = damp(lookTarget.y, LOOK_BASE_Y + pointerSmooth.y * 1.2, 1.2, dt);
+  lookTarget.x = damp(lookTarget.x, pointerSmooth.x * 2.4, 0.9, dt);
+  lookTarget.y = damp(lookTarget.y, LOOK_BASE_Y + pointerSmooth.y * 1.2, 0.9, dt);
   camera.lookAt(lookTarget);
 
   // parallax on the foreground pedestals — they move MORE than the wall
-  parallaxGroup.position.x = damp(parallaxGroup.position.x, -pointerSmooth.x * 0.9, 1.8, dt);
-  parallaxGroup.position.z = damp(parallaxGroup.position.z, pointerSmooth.y * 0.5, 1.8, dt);
+  parallaxGroup.position.x = damp(parallaxGroup.position.x, -pointerSmooth.x * 0.9, 1.4, dt);
+  parallaxGroup.position.z = damp(parallaxGroup.position.z, pointerSmooth.y * 0.5, 1.4, dt);
+
+  // (4) very slow "breathing" parallax on the painting itself
+  muralTexture.offset.x = muralOffsetBaseX + Math.sin(t * 0.05) * 0.0016;
+  muralRelief.offset.x = muralTexture.offset.x;
 
   // mouse-follow spotlight: project pointer onto the wall, then glide (frame-rate independent)
   raycaster.setFromCamera(pointerSmooth, camera);
   const hit = raycaster.intersectObject(wallPlane, false)[0];
   if (hit) {
-    followTarget.position.x = damp(followTarget.position.x, hit.point.x, 1.6, dt);
-    followTarget.position.y = damp(followTarget.position.y, hit.point.y, 1.6, dt);
-    followTarget.position.z = damp(followTarget.position.z, hit.point.z, 1.6, dt);
-    followSpot.position.x = damp(followSpot.position.x, hit.point.x * 0.4, 1.6, dt);
+    followTarget.position.x = damp(followTarget.position.x, hit.point.x, 1.2, dt);
+    followTarget.position.y = damp(followTarget.position.y, hit.point.y, 1.2, dt);
+    followTarget.position.z = damp(followTarget.position.z, hit.point.z, 1.2, dt);
+    followSpot.position.x = damp(followSpot.position.x, hit.point.x * 0.4, 1.2, dt);
+  }
+
+  // (7) cursor circuit decal — projected onto the floor, glowing while the mouse moves
+  const floorPt = raycaster.ray.intersectPlane(floorPlaneMath, tmpV);
+  if (floorPt && Math.hypot(floorPt.x, floorPt.z) < CFG.wallRadius - 1) {
+    circuitState.pos.x = damp(circuitState.pos.x, floorPt.x, 6, dt);
+    circuitState.pos.z = damp(circuitState.pos.z, floorPt.z, 6, dt);
+  }
+  circuitState.energy = Math.max(0, (circuitState.energy || 0) - dt * 0.7);
+  circuitState.strength = damp(circuitState.strength, circuitState.energy, 4, dt);
+  circuit.visible = circuitState.strength > 0.01;
+  if (circuit.visible) {
+    circuit.position.set(circuitState.pos.x, 0.03, circuitState.pos.z);
+    circuitMat.uniforms.uTime.value = t;
+    circuitMat.uniforms.uStrength.value = circuitState.strength;
+  }
+
+  // (6) idle ambient floor pool — breathes on its own, independent of the mouse
+  floorPool.material.opacity = 0.32 + Math.sin(t * 0.5) * 0.08;
+  floorPool.scale.setScalar(1 + Math.sin(t * 0.35) * 0.04);
+
+  // (8/9) drifting dust + slowly rotating light shafts
+  const dp = dust.geometry.attributes.position.array;
+  for (let i = 0; i < DUST; i++) {
+    const ph = dustPhase[i];
+    dp[i * 3 + 1] += dt * (0.04 + 0.03 * Math.sin(ph)); // gentle rise
+    dp[i * 3] += Math.sin(t * 0.1 + ph) * dt * 0.06;
+    dp[i * 3 + 2] += Math.cos(t * 0.09 + ph) * dt * 0.06;
+    if (dp[i * 3 + 1] > CFG.ceilingY - 0.3) dp[i * 3 + 1] = 0.4; // recycle
+  }
+  dust.geometry.attributes.position.needsUpdate = true;
+  shafts.rotation.y = t * 0.015;
+  shafts.material.opacity = 0.03 + Math.sin(t * 0.7) * 0.008;
+
+  // (10) occasional soft light-shift drifting across the mural
+  if (!passState.active && t > passState.next) {
+    passState.active = true; passState.t0 = t;
+    passState.dur = 6 + Math.random() * 3;
+    passState.dir = Math.random() > 0.5 ? 1 : -1;
+  }
+  if (passState.active) {
+    const k = (t - passState.t0) / passState.dur;        // 0..1
+    if (k >= 1) { passState.active = false; passState.next = t + 30 + Math.random() * 30; }
+    else {
+      const fade = Math.sin(k * Math.PI);                // in/out
+      passSprite.position.x = passState.dir * (k - 0.5) * 22;
+      passSprite.position.y = 4.4 + Math.sin(k * Math.PI) * 0.6;
+      passSprite.material.opacity = fade * 0.16;
+    }
   }
 
   // pulsing ceiling ring + dots
