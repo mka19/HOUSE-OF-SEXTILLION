@@ -50,19 +50,22 @@ npm run build && npm run preview
 - **Scale + glow feedback** on hover, and a **click pulse** on the placed objects (the three
   gilded pedestals map to *Bags*, *Belts*, *Shoes*).
 
-## Using your own reference photo on the wall
+## The mural on the wall
 
-The wall automatically prefers a real photo if present:
+The wall texture is resolved in this order (`src/main.js` → `makeMuralTexture`):
 
-```
-public/textures/mural.jpg
-```
+1. **`public/MURAL.jpeg`** — the real reference photo (currently in use). Because that image
+   is the *whole room*, the loader crops just the painted wall band (`MURAL_CROP`) and maps
+   that onto the curved wall, so our own 3D ceiling and reflective floor frame it instead of
+   a room-inside-a-room. The cylinder's inner faces mirror U, so the texture is flipped back
+   to its true left-to-right order.
+2. `public/textures/mural.jpg` — an alternate drop-in slot.
+3. A **faithful procedural recreation** (`src/mural.js`) — cream sky, layered misty mountains,
+   a winding luminous river, gold pagodas/trees, a suited rabbit, panther, toucan, snake, and
+   soft gold panel mouldings — used only if no photo is found.
 
-Drop your reference image there (any wide, ~3:1 panorama works best) and reload — it will be
-mapped directly onto the curved wall. If the file is absent, a **faithful procedural
-recreation** of the reference mural is generated at runtime (`src/mural.js`): cream sky,
-layered misty mountains, a winding luminous river, gold pagodas/trees, animal accents, and
-vertical gold panel seams.
+To swap the art, replace `public/MURAL.jpeg` (or adjust `MURAL_CROP` if your image is already
+just the panorama band rather than the full room).
 
 ## Structure
 

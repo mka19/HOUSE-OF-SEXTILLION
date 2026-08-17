@@ -5,8 +5,9 @@
 // as a real texture on the curved wall. If a real photo exists at
 // /textures/mural.jpg it is used instead (see loadMuralTexture()).
 
-const W = 4096;
-const H = 1400;
+const W = 6144;   // high-res so fine character detail survives mipmapping on the curve
+const H = 2048;
+const SC = W / 4096;   // scale factor for px-based motifs authored at 4096-wide
 
 function lerp(a, b, t) { return a + (b - a) * t; }
 
@@ -311,24 +312,74 @@ function toucan(ctx, x, y, s) {
   ctx.restore();
 }
 
-// Vertical gold panel seams that divide the panorama, as in the reference.
-function panels(ctx, count) {
-  for (let i = 1; i < count; i++) {
-    const x = (i / count) * W;
-    // frame shadow + gilded highlight
-    const g = ctx.createLinearGradient(x - 10, 0, x + 10, 0);
-    g.addColorStop(0, 'rgba(60,44,18,0)');
-    g.addColorStop(0.4, 'rgba(60,44,18,0.28)');
-    g.addColorStop(0.5, 'rgba(233,210,149,0.85)');
-    g.addColorStop(0.6, 'rgba(60,44,18,0.28)');
-    g.addColorStop(1, 'rgba(60,44,18,0)');
-    ctx.fillStyle = g;
-    ctx.fillRect(x - 10, 0, 20, H);
+// Suited rabbit strolling — the anthropomorphic gentleman of the reference.
+function rabbit(ctx, x, y, s) {
+  ctx.save();
+  ctx.translate(x, y);
+  const suit = '#c6a86a', suitDk = '#a5854b', fur = '#efe6cf', furDk = '#d8caa6';
+  // trousers
+  ctx.fillStyle = fur;
+  ctx.fillRect(-s * 0.16, -s * 0.34, s * 0.14, s * 0.34);
+  ctx.fillRect(s * 0.02, -s * 0.34, s * 0.14, s * 0.34);
+  // shoes
+  ctx.fillStyle = '#8a6a34';
+  ctx.beginPath(); ctx.ellipse(-s * 0.09, 0, s * 0.1, s * 0.035, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(s * 0.09, 0, s * 0.1, s * 0.035, 0, 0, Math.PI * 2); ctx.fill();
+  // jacket torso
+  ctx.fillStyle = suit;
+  ctx.beginPath();
+  ctx.moveTo(-s * 0.2, -s * 0.34);
+  ctx.quadraticCurveTo(-s * 0.24, -s * 0.6, -s * 0.16, -s * 0.72);
+  ctx.lineTo(s * 0.16, -s * 0.72);
+  ctx.quadraticCurveTo(s * 0.24, -s * 0.6, s * 0.2, -s * 0.34);
+  ctx.closePath(); ctx.fill();
+  // lapel shading
+  ctx.strokeStyle = suitDk; ctx.lineWidth = s * 0.02;
+  ctx.beginPath(); ctx.moveTo(0, -s * 0.7); ctx.lineTo(0, -s * 0.4); ctx.stroke();
+  // arm holding a small case
+  ctx.strokeStyle = suit; ctx.lineWidth = s * 0.09; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(s * 0.16, -s * 0.6); ctx.lineTo(s * 0.26, -s * 0.38); ctx.stroke();
+  ctx.fillStyle = '#b7933f';
+  ctx.fillRect(s * 0.20, -s * 0.4, s * 0.14, s * 0.12); // little gold bag/case
+  // head
+  ctx.fillStyle = fur;
+  ctx.beginPath(); ctx.ellipse(0, -s * 0.82, s * 0.13, s * 0.15, 0, 0, Math.PI * 2); ctx.fill();
+  // ears
+  for (const d of [-1, 1]) {
+    ctx.save(); ctx.translate(d * s * 0.05, -s * 0.92); ctx.rotate(d * 0.28);
+    ctx.fillStyle = fur;
+    ctx.beginPath(); ctx.ellipse(0, -s * 0.16, s * 0.045, s * 0.2, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = furDk;
+    ctx.beginPath(); ctx.ellipse(0, -s * 0.16, s * 0.022, s * 0.15, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
   }
+  // eye + snout
+  ctx.fillStyle = '#3a2c18';
+  ctx.beginPath(); ctx.arc(s * 0.04, -s * 0.83, s * 0.016, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+// Vertical panel dividers rendered as softly-rounded gold mouldings — a shaded
+// bead with a highlight crown, not a hard CAD line.
+function moulding(ctx, x, hw) {
+  const g = ctx.createLinearGradient(x - hw, 0, x + hw, 0);
+  g.addColorStop(0.00, 'rgba(58,42,16,0)');
+  g.addColorStop(0.20, 'rgba(58,42,16,0.22)');   // soft outer shadow
+  g.addColorStop(0.36, 'rgba(150,118,58,0.55)');
+  g.addColorStop(0.47, 'rgba(238,216,158,0.92)'); // rounded highlight crown
+  g.addColorStop(0.53, 'rgba(246,228,178,0.98)');
+  g.addColorStop(0.64, 'rgba(150,118,58,0.55)');
+  g.addColorStop(0.80, 'rgba(58,42,16,0.22)');
+  g.addColorStop(1.00, 'rgba(58,42,16,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(x - hw, 0, hw * 2, H);
+}
+function panels(ctx, count) {
+  const hw = 16 * SC;
+  for (let i = 1; i < count; i++) moulding(ctx, (i / count) * W, hw);
   // outer frame edges
-  ctx.fillStyle = 'rgba(233,210,149,0.7)';
-  ctx.fillRect(0, 0, 5, H);
-  ctx.fillRect(W - 5, 0, 5, H);
+  moulding(ctx, hw * 0.5, hw * 0.7);
+  moulding(ctx, W - hw * 0.5, hw * 0.7);
 }
 
 export function drawMuralCanvas() {

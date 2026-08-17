@@ -15,14 +15,14 @@ import { drawMuralCanvas } from './mural.js';
 const CFG = {
   wallRadius: 18,
   wallHeight: 12,
-  wallArc: Math.PI * 1.05,      // ~189° of curved panorama
+  wallArc: Math.PI * 0.82,      // ~148° — fits more of the mural's cast in frame
   ceilingY: 7.7,
-  exposure: 0.88,
+  exposure: 0.85,
   envIntensity: 0.7,
   fogColor: 0x6a5836,
   fogDensity: 0.009,
-  bloom: { strength: 0.24, radius: 0.6, threshold: 0.95 },
-  camera: { base: new THREE.Vector3(0, 3.15, 9.4) },
+  bloom: { strength: 0.16, radius: 0.6, threshold: 0.96 },
+  camera: { base: new THREE.Vector3(0, 3.4, 10.8) },
 };
 
 /* -------------------------------------------------------------------------- */
@@ -44,8 +44,8 @@ scene.fog = new THREE.FogExp2(CFG.fogColor, CFG.fogDensity);
 const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 200);
 camera.position.copy(CFG.camera.base);
 
-const lookTarget = new THREE.Vector3(0, 3.95, -CFG.wallRadius);
-const LOOK_BASE_Y = 3.95;
+const lookTarget = new THREE.Vector3(0, 3.7, -CFG.wallRadius);
+const LOOK_BASE_Y = 3.7;
 
 /* -------------------------------------------------------------------------- */
 /*  Loading manager -> loader bar                                               */
@@ -91,30 +91,56 @@ new EXRLoader(manager).load(hdriUrl, (texture) => {
 /* -------------------------------------------------------------------------- */
 /*  Curved mural wall                                                           */
 /* -------------------------------------------------------------------------- */
+// The uploaded reference (public/MURAL.jpeg) is the whole room. Crop just the
+// painted wall band so our own 3D ceiling + floor frame it, instead of mapping
+// a room-inside-a-room. Fractions are of the source image (1536x1024).
+const MURAL_CROP = { top: 0.185, bottom: 0.795, left: 0.0, right: 1.0 };
+
+function textureFromImage(img) {
+  const sx = img.width * MURAL_CROP.left;
+  const sy = img.height * MURAL_CROP.top;
+  const sw = img.width * (MURAL_CROP.right - MURAL_CROP.left);
+  const sh = img.height * (MURAL_CROP.bottom - MURAL_CROP.top);
+  const c = document.createElement('canvas');
+  c.width = Math.round(sw);
+  c.height = Math.round(sh);
+  c.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, c.width, c.height);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
 function makeMuralTexture() {
   return new Promise((resolve) => {
-    // Prefer a real reference photo if the user has supplied one.
-    const img = new Image();
-    img.onload = () => {
-      const t = new THREE.Texture(img);
-      t.colorSpace = THREE.SRGBColorSpace;
-      t.needsUpdate = true;
-      resolve(t);
+    // Prefer the real reference photo; fall back to the procedural recreation.
+    const candidates = ['./MURAL.jpeg', './textures/mural.jpg'];
+    let i = 0;
+    const tryNext = () => {
+      if (i >= candidates.length) {
+        const t = new THREE.CanvasTexture(drawMuralCanvas());
+        t.colorSpace = THREE.SRGBColorSpace;
+        resolve({ tex: t, real: false });
+        return;
+      }
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => resolve({ tex: textureFromImage(img), real: true });
+      img.onerror = () => { i++; tryNext(); };
+      img.src = candidates[i];
     };
-    img.onerror = () => {
-      const t = new THREE.CanvasTexture(drawMuralCanvas());
-      t.colorSpace = THREE.SRGBColorSpace;
-      resolve(t);
-    };
-    img.src = './textures/mural.jpg';
+    tryNext();
   });
 }
 
 let muralMat;
-const muralTexture = await makeMuralTexture();
+const { tex: muralTexture, real: muralIsReal } = await makeMuralTexture();
 muralTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
 muralTexture.wrapS = THREE.ClampToEdgeWrapping;
 muralTexture.wrapT = THREE.ClampToEdgeWrapping;
+// the cylinder's inner (BackSide) faces mirror U — flip it so the panorama
+// reads in its true left-to-right order (panther left, snake/tree right).
+muralTexture.repeat.x = -1;
+muralTexture.offset.x = 1;
 
 const wallGeo = new THREE.CylinderGeometry(
   CFG.wallRadius, CFG.wallRadius, CFG.wallHeight, 160, 1, true,
@@ -127,7 +153,8 @@ muralMat = new THREE.MeshStandardMaterial({
   metalness: 0.04,
   emissive: 0xffffff,
   emissiveMap: muralTexture,
-  emissiveIntensity: 0.3,   // painted panels read as evenly self-lit, like the reference
+  // the real photo already carries its own light, so it needs little self-glow
+  emissiveIntensity: muralIsReal ? 0.07 : 0.3,
   envMapIntensity: 0.35,
 });
 const wall = new THREE.Mesh(wallGeo, muralMat);
@@ -218,26 +245,35 @@ const ceilingGroup = new THREE.Group();
 ceilingGroup.position.y = CFG.ceilingY;
 scene.add(ceilingGroup);
 
-// solid gilded ceiling plane
-const ceilMat = new THREE.MeshStandardMaterial({ color: 0x6f5a30, roughness: 0.5, metalness: 0.8, side: THREE.DoubleSide });
-const ceiling = new THREE.Mesh(new THREE.CircleGeometry(CFG.wallRadius, 96), ceilMat);
-ceiling.rotation.x = Math.PI / 2;
+// Smoothly turned gilded ceiling with a rounded recessed cove (no hard CAD edges).
+// Profile is (radius, y) revolved; short arcs keep every transition beveled.
+function arc(pts, cx, cy, r, a0, a1, steps) {
+  for (let i = 0; i <= steps; i++) {
+    const a = a0 + (a1 - a0) * (i / steps);
+    pts.push(new THREE.Vector2(cx + Math.cos(a) * r, cy + Math.sin(a) * r));
+  }
+}
+const ceilProfile = [];
+ceilProfile.push(new THREE.Vector2(0.0, 0.34));           // recessed centre panel
+ceilProfile.push(new THREE.Vector2(3.7, 0.34));
+arc(ceilProfile, 3.7, 0.12, 0.22, Math.PI / 2, 0, 8);     // rounded lip down into cove
+ceilProfile.push(new THREE.Vector2(3.92, -0.16));
+arc(ceilProfile, 4.4, -0.16, 0.48, Math.PI, Math.PI * 1.5, 10); // cove floor curve
+ceilProfile.push(new THREE.Vector2(6.1, -0.16));
+arc(ceilProfile, 6.1, 0.1, 0.26, -Math.PI / 2, 0, 8);     // rounded lip back up
+ceilProfile.push(new THREE.Vector2(6.36, 0.34));
+ceilProfile.push(new THREE.Vector2(CFG.wallRadius, 0.36));  // flat outer ceiling
+const ceilMat = new THREE.MeshStandardMaterial({ color: 0x6a5530, roughness: 0.55, metalness: 0.75, side: THREE.DoubleSide });
+const ceiling = new THREE.Mesh(new THREE.LatheGeometry(ceilProfile, 160), ceilMat);
 ceilingGroup.add(ceiling);
 
-// concentric recessed cove
-const coveMat = new THREE.MeshStandardMaterial({ color: 0x4a3c20, roughness: 0.6, metalness: 0.6, side: THREE.DoubleSide });
-const cove = new THREE.Mesh(new THREE.RingGeometry(4.2, 6.4, 96), coveMat);
-cove.rotation.x = Math.PI / 2;
-cove.position.y = -0.02;
-ceilingGroup.add(cove);
-
-// the glowing ring
+// the glowing ring — high radial/tubular segments so it reads perfectly round
 const ringMat = new THREE.MeshStandardMaterial({
-  color: 0xfff0d2, emissive: 0xffdfa0, emissiveIntensity: 2.2, roughness: 0.4, metalness: 0.2,
+  color: 0xfff0d2, emissive: 0xffdfa0, emissiveIntensity: 2.2, roughness: 0.35, metalness: 0.2,
 });
-const ring = new THREE.Mesh(new THREE.TorusGeometry(5.3, 0.16, 24, 160), ringMat);
+const ring = new THREE.Mesh(new THREE.TorusGeometry(5.3, 0.17, 40, 220), ringMat);
 ring.rotation.x = Math.PI / 2;
-ring.position.y = -0.05;
+ring.position.y = -0.12;
 ceilingGroup.add(ring);
 
 // inner soft disc glow
@@ -272,11 +308,9 @@ scene.add(ambient);
 /* -------------------------------------------------------------------------- */
 /*  Mouse-follow spotlight sweeping the wall/floor                              */
 /* -------------------------------------------------------------------------- */
-const followSpot = new THREE.SpotLight(0xffe8c4, 90, 55, Math.PI / 7, 0.9, 1.1);
+const followSpot = new THREE.SpotLight(0xffe8c4, 60, 55, Math.PI / 7, 0.95, 1.1);
 followSpot.position.set(0, 7.5, 3);
-followSpot.castShadow = true;
-followSpot.shadow.mapSize.set(1024, 1024);
-followSpot.shadow.bias = -0.0005;
+followSpot.castShadow = false; // soft accent light only — no hard shadow frustum artifacts
 const followTarget = new THREE.Object3D();
 followTarget.position.set(0, 3.5, -CFG.wallRadius + 1);
 scene.add(followTarget);
@@ -290,42 +324,104 @@ const parallaxGroup = new THREE.Group();
 scene.add(parallaxGroup);
 
 const interactive = [];
+// Hero product dead-centre as the focal point; two quieter accents set back.
 const pedestalDefs = [
-  { x: -7.2, z: 4.3, label: 'Bags', color: 0x9c7b3a },
-  { x: 0.0, z: 5.6, label: 'Belts', color: 0xb08a42 },
-  { x: 7.2, z: 4.3, label: 'Shoes', color: 0x8a6c34 },
+  { x: 0.0, z: 2.4, label: 'Belts', color: 0xd8b45e, hero: true, scale: 1.18 },
+  { x: -9.2, z: -0.6, label: 'Bags', color: 0xc9a24c, hero: false, scale: 0.82 },
+  { x: 9.2, z: -0.6, label: 'Shoes', color: 0xbf9846, hero: false, scale: 0.82 },
 ];
+
+// A smoothly turned pedestal profile — every corner is a short arc, no sharp edges.
+function makePedestalGeometry() {
+  const p = [
+    [0.00, 0.00], [0.50, 0.00],
+    [0.525, 0.018], [0.528, 0.036], [0.515, 0.052], [0.49, 0.064],
+    [0.45, 0.10], [0.41, 0.17], [0.385, 0.26], [0.378, 0.42],
+    [0.378, 1.14],
+    [0.40, 1.27], [0.44, 1.37], [0.47, 1.435],
+    [0.487, 1.475], [0.483, 1.505], [0.46, 1.52],
+    [0.30, 1.53], [0.00, 1.532],
+  ].map(([r, y]) => new THREE.Vector2(r, y));
+  return new THREE.LatheGeometry(p, 96);
+}
+const pedestalGeo = makePedestalGeometry();
+
+// A thin rounded display plate (its own lathe so the edge is beveled, not a disc lip).
+function makePlateGeometry() {
+  const p = [
+    [0.00, 0.00], [0.36, 0.00],
+    [0.395, 0.012], [0.40, 0.035], [0.385, 0.058], [0.35, 0.07],
+    [0.00, 0.072],
+  ].map(([r, y]) => new THREE.Vector2(r, y));
+  return new THREE.LatheGeometry(p, 72);
+}
+const plateGeo = makePlateGeometry();
+
+// Soft radial contact-shadow decal — reliable AO-style grounding on the mirror
+// floor without any screen-space AO artifacts.
+const contactShadowTex = (() => {
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const g = c.getContext('2d').createRadialGradient(128, 128, 6, 128, 128, 126);
+  g.addColorStop(0, 'rgba(0,0,0,0.55)');
+  g.addColorStop(0.45, 'rgba(0,0,0,0.28)');
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  const x = c.getContext('2d');
+  x.fillStyle = g; x.fillRect(0, 0, 256, 256);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+})();
+const contactShadowGeo = new THREE.PlaneGeometry(1, 1);
 
 for (const def of pedestalDefs) {
   const group = new THREE.Group();
   group.position.set(def.x, 0, def.z);
+  group.scale.setScalar(def.scale);
 
-  const colMat = new THREE.MeshPhysicalMaterial({ color: 0x1b1712, roughness: 0.35, metalness: 0.4, clearcoat: 0.6 });
-  const column = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.5, 1.5, 48), colMat);
-  column.position.y = 0.75;
+  // grounding contact shadow, laid flat just above the floor
+  const shadow = new THREE.Mesh(
+    contactShadowGeo,
+    new THREE.MeshBasicMaterial({ map: contactShadowTex, transparent: true, depthWrite: false, opacity: 0.9 }),
+  );
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.y = 0.02;
+  shadow.scale.setScalar(2.1);
+  group.add(shadow);
+
+  // softer, more dimensional stone-bronze (less clearcoat -> not plastic)
+  const colMat = new THREE.MeshPhysicalMaterial({
+    color: 0x241d15, roughness: 0.52, metalness: 0.35, clearcoat: 0.25, clearcoatRoughness: 0.4, envMapIntensity: 0.8,
+  });
+  const column = new THREE.Mesh(pedestalGeo, colMat);
   column.castShadow = true;
   column.receiveShadow = true;
   group.add(column);
 
   // glowing top plate — the interactive target
   const plateMat = new THREE.MeshStandardMaterial({
-    color: 0xf3dfa8, emissive: 0xc79a45, emissiveIntensity: 0.35, roughness: 0.25, metalness: 1.0,
+    color: 0xf3dfa8, emissive: 0xc79a45, emissiveIntensity: 0.35, roughness: 0.3, metalness: 0.9,
   });
-  const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.1, 48), plateMat);
-  plate.position.y = 1.55;
+  const plate = new THREE.Mesh(plateGeo, plateMat);
+  plate.position.y = 1.5;
   plate.castShadow = true;
+  plate.receiveShadow = true;
   group.add(plate);
 
-  // a simple gilded product form on top (abstract luxe object)
-  const objMat = new THREE.MeshPhysicalMaterial({ color: def.color, roughness: 0.22, metalness: 1.0, clearcoat: 0.8, envMapIntensity: 1.6 });
-  const obj = new THREE.Mesh(new THREE.TorusKnotGeometry(0.2, 0.07, 120, 16), objMat);
-  obj.position.y = 1.95;
+  // gilded product form, centred on the plate; softer metal (not mirror-plastic)
+  const objMat = new THREE.MeshPhysicalMaterial({
+    color: def.color, roughness: 0.3, metalness: 0.85, clearcoat: 0.5, clearcoatRoughness: 0.35, envMapIntensity: 1.3,
+  });
+  const r = def.hero ? 0.27 : 0.2;
+  const obj = new THREE.Mesh(new THREE.TorusKnotGeometry(r, r * 0.34, 220, 32), objMat);
+  const restY = 1.5 + r + 0.18;
+  obj.position.y = restY;
   obj.castShadow = true;
   group.add(obj);
 
   group.userData = {
     label: def.label,
-    plate, obj, plateMat, objMat,
+    plate, obj, plateMat, objMat, restY,
     baseEmissive: 0.35,
     hover: 0,          // eased 0..1 hover amount
     click: 0,          // decaying click pulse
@@ -340,6 +436,7 @@ for (const def of pedestalDefs) {
 /* -------------------------------------------------------------------------- */
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
+
 const bloom = new UnrealBloomPass(
   new THREE.Vector2(window.innerWidth, window.innerHeight),
   CFG.bloom.strength, CFG.bloom.radius, CFG.bloom.threshold,
@@ -351,7 +448,8 @@ composer.addPass(new ShaderPass(GammaCorrectionShader));
 /*  Pointer / interaction state                                                 */
 /* -------------------------------------------------------------------------- */
 const pointer = new THREE.Vector2(0, 0);      // -1..1
-const pointerEased = new THREE.Vector2(0, 0);
+const pointerEased = new THREE.Vector2(0, 0);  // first smoothing stage
+const pointerSmooth = new THREE.Vector2(0, 0); // second stage -> silky, no snap
 const raycaster = new THREE.Raycaster();
 let lastInteract = performance.now();
 let hovered = null;
@@ -438,38 +536,42 @@ function animate() {
   const dt = Math.min(clock.getDelta(), 0.05);
   const t = clock.elapsedTime;
 
-  // ease pointer for silky parallax
-  pointerEased.x = damp(pointerEased.x, pointer.x, 3.0, dt);
-  pointerEased.y = damp(pointerEased.y, pointer.y, 3.0, dt);
+  // two-stage easing -> deep, fluid inertia with no snap
+  pointerEased.x = damp(pointerEased.x, pointer.x, 1.7, dt);
+  pointerEased.y = damp(pointerEased.y, pointer.y, 1.7, dt);
+  pointerSmooth.x = damp(pointerSmooth.x, pointerEased.x, 1.3, dt);
+  pointerSmooth.y = damp(pointerSmooth.y, pointerEased.y, 1.3, dt);
 
   // idle drift: when the user is still, gently sway the camera
-  const idle = Math.min(1, (performance.now() - lastInteract) / 2600);
-  const driftX = Math.sin(t * 0.16) * 0.55 + Math.sin(t * 0.37) * 0.18;
-  const driftY = Math.cos(t * 0.21) * 0.22;
+  const idle = Math.min(1, (performance.now() - lastInteract) / 3600);
+  const driftX = Math.sin(t * 0.13) * 0.6 + Math.sin(t * 0.31) * 0.2;
+  const driftY = Math.cos(t * 0.17) * 0.24;
 
-  const targetX = CFG.camera.base.x + pointerEased.x * 1.7 * (1 - idle * 0.35) + driftX * idle;
-  const targetY = CFG.camera.base.y + pointerEased.y * 0.9 * (1 - idle * 0.35) + driftY * idle + Math.sin(t * 0.5) * 0.05;
-  const targetZ = CFG.camera.base.z - Math.abs(pointerEased.y) * 0.4;
+  const targetX = CFG.camera.base.x + pointerSmooth.x * 1.7 * (1 - idle * 0.35) + driftX * idle;
+  const targetY = CFG.camera.base.y + pointerSmooth.y * 0.9 * (1 - idle * 0.35) + driftY * idle + Math.sin(t * 0.42) * 0.05;
+  const targetZ = CFG.camera.base.z - Math.abs(pointerSmooth.y) * 0.4;
 
-  camera.position.x = damp(camera.position.x, targetX, 2.2, dt);
-  camera.position.y = damp(camera.position.y, targetY, 2.2, dt);
-  camera.position.z = damp(camera.position.z, targetZ, 2.2, dt);
+  camera.position.x = damp(camera.position.x, targetX, 1.3, dt);
+  camera.position.y = damp(camera.position.y, targetY, 1.3, dt);
+  camera.position.z = damp(camera.position.z, targetZ, 1.3, dt);
 
   // eased look target with a touch of parallax (background moves slower)
-  lookTarget.x = damp(lookTarget.x, pointerEased.x * 2.4, 2.0, dt);
-  lookTarget.y = damp(lookTarget.y, LOOK_BASE_Y + pointerEased.y * 1.2, 2.0, dt);
+  lookTarget.x = damp(lookTarget.x, pointerSmooth.x * 2.4, 1.2, dt);
+  lookTarget.y = damp(lookTarget.y, LOOK_BASE_Y + pointerSmooth.y * 1.2, 1.2, dt);
   camera.lookAt(lookTarget);
 
   // parallax on the foreground pedestals — they move MORE than the wall
-  parallaxGroup.position.x = damp(parallaxGroup.position.x, -pointerEased.x * 0.9, 3.0, dt);
-  parallaxGroup.position.z = damp(parallaxGroup.position.z, pointerEased.y * 0.5, 3.0, dt);
+  parallaxGroup.position.x = damp(parallaxGroup.position.x, -pointerSmooth.x * 0.9, 1.8, dt);
+  parallaxGroup.position.z = damp(parallaxGroup.position.z, pointerSmooth.y * 0.5, 1.8, dt);
 
-  // mouse-follow spotlight: project pointer onto the wall
-  raycaster.setFromCamera(pointerEased, camera);
+  // mouse-follow spotlight: project pointer onto the wall, then glide (frame-rate independent)
+  raycaster.setFromCamera(pointerSmooth, camera);
   const hit = raycaster.intersectObject(wallPlane, false)[0];
   if (hit) {
-    followTarget.position.lerp(hit.point, 0.12);
-    followSpot.position.x = damp(followSpot.position.x, hit.point.x * 0.4, 3.0, dt);
+    followTarget.position.x = damp(followTarget.position.x, hit.point.x, 1.6, dt);
+    followTarget.position.y = damp(followTarget.position.y, hit.point.y, 1.6, dt);
+    followTarget.position.z = damp(followTarget.position.z, hit.point.z, 1.6, dt);
+    followSpot.position.x = damp(followSpot.position.x, hit.point.x * 0.4, 1.6, dt);
   }
 
   // pulsing ceiling ring + dots
@@ -495,7 +597,7 @@ function animate() {
     g.scale.setScalar(damp(g.scale.x, s, 10, dt));
     d.spin += dt * (0.3 + d.hover * 0.8);
     d.obj.rotation.y = d.spin;
-    d.obj.position.y = 1.95 + Math.sin(t * 1.5 + d.spin) * 0.03 + d.hover * 0.05;
+    d.obj.position.y = d.restY + Math.sin(t * 1.2 + d.spin) * 0.025 + d.hover * 0.06;
   }
 
   composer.render();
