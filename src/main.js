@@ -26,7 +26,7 @@ const CFG = {
   bloom: { strength: 0.16, radius: 0.6, threshold: 0.96 },
   // telephoto + close = the hero feels substantial; background compresses behind it
   fov: 38,
-  camera: { base: new THREE.Vector3(0, 3.5, 13.2) },
+  camera: { base: new THREE.Vector3(0, 3.5, 14.6) },
   heroFocusY: 2.15,
 };
 
