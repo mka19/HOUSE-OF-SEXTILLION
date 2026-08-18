@@ -581,22 +581,22 @@ ringLight.position.set(0, CFG.ceilingY - 0.4, 0);
 scene.add(ringLight);
 
 // minimal flat fill — HDRI carries the ambient, so keep these low
-const fillLight = new THREE.HemisphereLight(0xfff2d8, 0x342a16, 0.12);
+const fillLight = new THREE.HemisphereLight(0xfff2d8, 0x342a16, 0.06);
 scene.add(fillLight);
 
 // grazing wall washers — raking light down the mural so the bas-relief casts
 // tiny self-shadows and reads as carved form, not a flat print
-const wallWashL = new THREE.SpotLight(0xffe9c6, 70, 34, Math.PI / 5, 0.92, 2);
+const wallWashL = new THREE.SpotLight(0xffe9c6, 30, 34, Math.PI / 5, 0.92, 2);
 wallWashL.position.set(-7, CFG.ceilingY - 0.6, -2);
 wallWashL.target.position.set(-11, 2.5, -CFG.wallRadius + 2);
 scene.add(wallWashL); scene.add(wallWashL.target);
-const wallWashR = new THREE.SpotLight(0xffe9c6, 70, 34, Math.PI / 5, 0.92, 2);
+const wallWashR = new THREE.SpotLight(0xffe9c6, 30, 34, Math.PI / 5, 0.92, 2);
 wallWashR.position.set(7, CFG.ceilingY - 0.6, -2);
 wallWashR.target.position.set(11, 2.5, -CFG.wallRadius + 2);
 scene.add(wallWashR); scene.add(wallWashR.target);
 
 // Real key light over the hero — soft-shadow casting + physical falloff (decay=2).
-const keyLight = new THREE.SpotLight(0xfff1d2, 720, 26, Math.PI / 7, 0.7, 2);
+const keyLight = new THREE.SpotLight(0xfff1d2, 950, 26, Math.PI / 7, 0.7, 2);
 keyLight.position.set(1.6, 8.4, 6.2);
 keyLight.castShadow = true;
 keyLight.shadow.mapSize.set(2048, 2048);
@@ -612,7 +612,7 @@ scene.add(keyTarget);
 keyLight.target = keyTarget;
 
 // A cooler rim/back light for shape separation (no shadow, cheap).
-const rimLight = new THREE.SpotLight(0xbfd0e6, 120, 30, Math.PI / 6, 0.9, 2);
+const rimLight = new THREE.SpotLight(0xbfd0e6, 210, 30, Math.PI / 6, 0.9, 2);
 rimLight.position.set(-6, 6, -6);
 scene.add(rimLight);
 
@@ -947,9 +947,11 @@ const GradePass = {
       col *= vec3(1.045, 1.005, 0.955);
       float l = dot(col, vec3(0.299,0.587,0.114));
       col = mix(vec3(l), col, 1.04);                 // gentle saturation
-      // strong vignette — concentrate light to the centre, fade edges to shadow
-      float vig = smoothstep(1.02, 0.28, length(c*vec2(1.0,1.12)));
-      col *= mix(0.4, 1.0, vig);
+      // strong, wide, horizontally-weighted vignette — keep only the centre third
+      // bright, drop the outer ~35% (all edges) into shadow like a spotlit room
+      vec2 vv = c * vec2(1.55, 1.15);
+      float vig = smoothstep(0.72, 0.18, length(vv));
+      col *= mix(0.22, 1.0, vig);
       // film grain
       float g = hash(uv*uRes*0.5 + uTime) - 0.5;
       col += g * 0.028;
