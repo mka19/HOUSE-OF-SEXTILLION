@@ -776,6 +776,7 @@ for (const def of pedestalDefs) {
   group.userData = {
     label: def.label,
     plate, obj, plateMat, objMat, restY,
+    baseScale: def.scale,   // hover/click must scale RELATIVE to this, not reset it
     baseEmissive: 0.26,
     hover: 0,          // eased 0..1 hover amount
     click: 0,          // decaying click pulse
@@ -1214,7 +1215,7 @@ function animate() {
     d.plateMat.emissiveIntensity = glow;
     d.objMat.emissiveIntensity = d.hover * 0.6 + d.click * 1.2;
     d.objMat.emissive = new THREE.Color(0xffcf7a);
-    const s = 1 + d.hover * 0.06 + d.click * 0.12;
+    const s = d.baseScale * (1 + d.hover * 0.06 + d.click * 0.12);
     g.scale.setScalar(damp(g.scale.x, s, 10, dt));
     d.spin += dt * (0.3 + d.hover * 0.8);
     d.obj.rotation.y = d.spin;
