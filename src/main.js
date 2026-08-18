@@ -637,7 +637,7 @@ scene.add(parallaxGroup);
 const interactive = [];
 // Hero product dead-centre as the focal point; two quieter accents set back.
 const pedestalDefs = [
-  { x: 0.0, z: 4.2, label: 'Belts', color: 0xd8b45e, hero: true, scale: 1.72 },
+  { x: 0.0, z: 4.2, label: 'Belts', color: 0xd8b45e, hero: true, scale: 2.4 },
   { x: -10.5, z: -1.2, label: 'Bags', color: 0xc9a24c, hero: false, scale: 0.9 },
   { x: 10.5, z: -1.2, label: 'Shoes', color: 0xbf9846, hero: false, scale: 0.9 },
 ];
