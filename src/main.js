@@ -372,8 +372,8 @@ function makeMuralTexture() {
 }
 
 let muralMat;
-const { tex: muralTexture, relief: muralRelief, real: muralIsReal } = await makeMuralTexture();
-for (const tex of [muralTexture, muralRelief.heightTex, muralRelief.normalTex]) {
+const { tex: muralTexture, real: muralIsReal } = await makeMuralTexture();
+for (const tex of [muralTexture]) {
   tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
   tex.wrapS = THREE.ClampToEdgeWrapping;
   tex.wrapT = THREE.ClampToEdgeWrapping;
@@ -383,9 +383,10 @@ for (const tex of [muralTexture, muralRelief.heightTex, muralRelief.normalTex]) 
   tex.offset.x = 1;
 }
 
-// Tessellated wall so the displacement has vertices to move — real bas-relief.
+// Smooth curved wall — no displacement/normal relief (that cracked at the panel
+// seams). The painting itself carries the detail; keep the surface clean.
 const wallGeo = new THREE.CylinderGeometry(
-  CFG.wallRadius, CFG.wallRadius, CFG.wallHeight, 256, 128, true,
+  CFG.wallRadius, CFG.wallRadius, CFG.wallHeight, 220, 1, true,
   Math.PI - CFG.wallArc / 2, CFG.wallArc,   // arc centred on the front (-z)
 );
 muralMat = new THREE.MeshStandardMaterial({
@@ -395,12 +396,8 @@ muralMat = new THREE.MeshStandardMaterial({
   metalness: 0.0,
   emissive: 0xffffff,
   emissiveMap: muralTexture,
-  emissiveIntensity: muralIsReal ? 0.05 : 0.28,   // less self-glow so relief shades
+  emissiveIntensity: muralIsReal ? 0.08 : 0.28,
   envMapIntensity: 0.7,
-  normalMap: muralRelief.normalTex,
-  normalScale: new THREE.Vector2(2.4, 2.4),
-  displacementMap: muralRelief.heightTex,
-  displacementScale: muralIsReal ? 1.1 : 0.6,     // figures physically push toward the room
 });
 const wall = new THREE.Mesh(wallGeo, muralMat);
 wall.position.y = CFG.wallHeight / 2;
@@ -992,7 +989,7 @@ function onPointerMove(e) {
   // hover test against interactive plates/objects
   raycaster.setFromCamera(pointer, camera);
   const targets = [];
-  for (const g of interactive) { targets.push(g.userData.plate, g.userData.obj); }
+  for (const g of interactive) { targets.push(g.userData.obj); }   // product only, not the plinth
   const hits = raycaster.intersectObjects(targets, false);
   const g = hits.length ? findGroup(hits[0].object) : null;
   if (g !== hovered) {
@@ -1009,7 +1006,7 @@ function onPointerMove(e) {
   }
 }
 function findGroup(obj) {
-  return interactive.find((g) => g.userData.plate === obj || g.userData.obj === obj) || null;
+  return interactive.find((g) => g.userData.obj === obj) || null;
 }
 function onClick() {
   if (hovered) hovered.userData.click = 1.0;
@@ -1143,8 +1140,6 @@ function animate() {
 
   // (4) very slow "breathing" parallax on the painting itself
   muralTexture.offset.x = muralOffsetBaseX + Math.sin(t * 0.05) * 0.0016;
-  muralRelief.heightTex.offset.x = muralTexture.offset.x;
-  muralRelief.normalTex.offset.x = muralTexture.offset.x;
 
   // mouse-follow spotlight: project pointer onto the wall, then glide (frame-rate independent)
   raycaster.setFromCamera(pointerSmooth, camera);
@@ -1220,12 +1215,11 @@ function animate() {
     const targetHover = hovered === g ? 1 : 0;
     d.hover = damp(d.hover, targetHover, 8.0, dt);        // ~250ms
     d.click = Math.max(0, d.click - dt * 3.0);            // ~330ms decay
-    const glow = d.baseEmissive + d.hover * 1.6 + d.click * 2.5;
-    d.plateMat.emissiveIntensity = glow;
+    // hover glow + scale affect ONLY the product; the pedestal stays static
     d.objMat.emissiveIntensity = d.hover * 0.6 + d.click * 1.2;
-    d.objMat.emissive = new THREE.Color(0xffcf7a);
-    const s = d.baseScale * (1 + d.hover * 0.06 + d.click * 0.12);
-    g.scale.setScalar(damp(g.scale.x, s, 10, dt));
+    d.objMat.emissive.setHex(0xffcf7a);
+    const os = 1 + d.hover * 0.08 + d.click * 0.14;
+    d.obj.scale.setScalar(damp(d.obj.scale.x, os, 10, dt));
     d.spin += dt * (0.3 + d.hover * 0.8);
     d.obj.rotation.y = d.spin;
     d.obj.position.y = d.restY + Math.sin(t * 1.2 + d.spin) * 0.025 + d.hover * 0.06;
