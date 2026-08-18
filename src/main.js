@@ -586,11 +586,11 @@ scene.add(fillLight);
 
 // grazing wall washers — raking light down the mural so the bas-relief casts
 // tiny self-shadows and reads as carved form, not a flat print
-const wallWashL = new THREE.SpotLight(0xffe9c6, 30, 34, Math.PI / 5, 0.92, 2);
+const wallWashL = new THREE.SpotLight(0xffe9c6, 14, 34, Math.PI / 5, 0.92, 2);
 wallWashL.position.set(-7, CFG.ceilingY - 0.6, -2);
 wallWashL.target.position.set(-11, 2.5, -CFG.wallRadius + 2);
 scene.add(wallWashL); scene.add(wallWashL.target);
-const wallWashR = new THREE.SpotLight(0xffe9c6, 30, 34, Math.PI / 5, 0.92, 2);
+const wallWashR = new THREE.SpotLight(0xffe9c6, 14, 34, Math.PI / 5, 0.92, 2);
 wallWashR.position.set(7, CFG.ceilingY - 0.6, -2);
 wallWashR.target.position.set(11, 2.5, -CFG.wallRadius + 2);
 scene.add(wallWashR); scene.add(wallWashR.target);
@@ -949,9 +949,9 @@ const GradePass = {
       col = mix(vec3(l), col, 1.04);                 // gentle saturation
       // strong, wide, horizontally-weighted vignette — keep only the centre third
       // bright, drop the outer ~35% (all edges) into shadow like a spotlit room
-      vec2 vv = c * vec2(1.55, 1.15);
-      float vig = smoothstep(0.72, 0.18, length(vv));
-      col *= mix(0.22, 1.0, vig);
+      vec2 vv = c * vec2(1.6, 1.18);
+      float vig = smoothstep(0.66, 0.15, length(vv));
+      col *= mix(0.12, 1.0, vig);
       // film grain
       float g = hash(uv*uRes*0.5 + uTime) - 0.5;
       col += g * 0.028;
