@@ -385,7 +385,7 @@ for (const tex of [muralTexture, muralRelief.heightTex, muralRelief.normalTex]) 
 
 // Tessellated wall so the displacement has vertices to move — real bas-relief.
 const wallGeo = new THREE.CylinderGeometry(
-  CFG.wallRadius, CFG.wallRadius, CFG.wallHeight, 512, 256, true,
+  CFG.wallRadius, CFG.wallRadius, CFG.wallHeight, 256, 128, true,
   Math.PI - CFG.wallArc / 2, CFG.wallArc,   // arc centred on the front (-z)
 );
 muralMat = new THREE.MeshStandardMaterial({
@@ -416,8 +416,8 @@ const floorGeo = new THREE.CircleGeometry(CFG.wallRadius, 128);
 
 const reflector = new Reflector(floorGeo, {
   clipBias: 0.003,
-  textureWidth: Math.min(2048, window.innerWidth * window.devicePixelRatio),
-  textureHeight: Math.min(2048, window.innerHeight * window.devicePixelRatio),
+  textureWidth: Math.min(1024, window.innerWidth * window.devicePixelRatio),
+  textureHeight: Math.min(1024, window.innerHeight * window.devicePixelRatio),
   color: 0x38342a, // dims the mirror so it reads as polished stone, not glass
 });
 reflector.rotation.x = -Math.PI / 2;
@@ -598,7 +598,7 @@ scene.add(wallWashR); scene.add(wallWashR.target);
 const keyLight = new THREE.SpotLight(0xfff1d2, 950, 26, Math.PI / 7, 0.7, 2);
 keyLight.position.set(1.6, 8.4, 6.2);
 keyLight.castShadow = true;
-keyLight.shadow.mapSize.set(2048, 2048);
+keyLight.shadow.mapSize.set(1024, 1024);
 keyLight.shadow.camera.near = 2;
 keyLight.shadow.camera.far = 22;
 keyLight.shadow.bias = -0.0006;
@@ -719,7 +719,7 @@ for (const def of pedestalDefs) {
   // grounding contact shadow — a tight dark core + a wider soft penumbra
   const shadowCore = new THREE.Mesh(
     contactShadowGeo,
-    new THREE.MeshBasicMaterial({ map: contactShadowTex, transparent: true, depthWrite: false, opacity: 0.85 }),
+    new THREE.MeshBasicMaterial({ map: contactShadowTex, transparent: true, depthWrite: false, opacity: 0.5 }),
   );
   shadowCore.rotation.x = -Math.PI / 2;
   shadowCore.position.y = 0.02;
@@ -727,7 +727,7 @@ for (const def of pedestalDefs) {
   group.add(shadowCore);
   const shadowSoft = shadowCore.clone();
   shadowSoft.material = shadowCore.material.clone();
-  shadowSoft.material.opacity = 0.4;
+  shadowSoft.material.opacity = 0.24;
   shadowSoft.position.y = 0.018;
   shadowSoft.scale.setScalar(2.7);
   group.add(shadowSoft);
@@ -736,10 +736,13 @@ for (const def of pedestalDefs) {
   const stoneNoise = microNoise.clone(); stoneNoise.needsUpdate = true; stoneNoise.repeat.set(2, 3);
   const stoneNormal = microNormal.clone(); stoneNormal.needsUpdate = true; stoneNormal.repeat.set(2, 3);
   const colMat = new THREE.MeshPhysicalMaterial({
-    color: 0x17120b, map: onyxMap, roughness: 0.42, roughnessMap: stoneNoise, metalness: 0.0,
-    clearcoat: 0.7, clearcoatRoughness: 0.22,
-    normalMap: stoneNormal, normalScale: new THREE.Vector2(0.25, 0.25),
-    envMapIntensity: 1.05,
+    color: 0x120f0a, map: onyxMap,           // deep near-black stone with faint veining
+    roughness: 0.16, roughnessMap: stoneNoise, // polished -> sharp reflections
+    metalness: 0.0,
+    clearcoat: 1.0, clearcoatRoughness: 0.06,  // wet-lacquer specular coat
+    normalMap: stoneNormal, normalScale: new THREE.Vector2(0.12, 0.12),
+    envMapIntensity: 1.8,                       // reflects the HDRI + the glowing product
+    reflectivity: 0.6,
   });
   // pedestal deliberately smaller (shorter + slimmer) so it never competes with
   // the product for focus — fine if the base is slightly cropped by the frame.
@@ -931,7 +934,7 @@ const GradePass = {
       float blur = smoothstep(0.20, 0.52, abs(c.x));          // horizontal edges
       blur = max(blur, smoothstep(0.34, 0.62, length(c)) * 0.6); // soften corners a touch
       vec3 col = vec3(0.0); float wsum = 0.0;
-      const int N = 12;
+      const int N = 8;
       for(int i=0;i<N;i++){
         float f = float(i)/float(N-1);                        // 0..1
         // sample toward centre (c points outward) -> content smears outward onto edges
@@ -950,9 +953,6 @@ const GradePass = {
       vec2 vv = c * vec2(1.6, 1.18);
       float vig = smoothstep(0.66, 0.15, length(vv));
       col *= mix(0.12, 1.0, vig);
-      // film grain
-      float g = hash(uv*uRes*0.5 + uTime) - 0.5;
-      col += g * 0.028;
       // linear -> sRGB
       col = pow(clamp(col,0.0,1.0), vec3(1.0/2.2));
       gl_FragColor = vec4(col, 1.0);
