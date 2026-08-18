@@ -4,7 +4,6 @@ import { Reflector } from 'three/examples/jsm/objects/Reflector.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
-import { BokehPass } from 'three/examples/jsm/postprocessing/BokehPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { GammaCorrectionShader } from 'three/examples/jsm/shaders/GammaCorrectionShader.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
@@ -636,10 +635,10 @@ scene.add(parallaxGroup);
 
 const interactive = [];
 // Hero product dead-centre as the focal point; two quieter accents set back.
+// Single-focus view: only the hero product is shown (nav/swipe cycles its
+// identity between Bags / Belts / Shoes on this one pedestal).
 const pedestalDefs = [
   { x: 0.0, z: 4.2, label: 'Belts', color: 0xd8b45e, hero: true, scale: 2.1 },
-  { x: -10.5, z: -1.2, label: 'Bags', color: 0xc9a24c, hero: false, scale: 0.9 },
-  { x: 10.5, z: -1.2, label: 'Shoes', color: 0xbf9846, hero: false, scale: 0.9 },
 ];
 
 // A smoothly turned pedestal profile — every corner is a short arc, no sharp edges.
@@ -901,12 +900,8 @@ const floorPlaneMath = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
 
-// Depth-of-field: focus on the hero, let the mural fall softly out of focus.
-const bokeh = new BokehPass(scene, camera, {
-  focus: 9.5, aperture: 0.0016, maxblur: 0.0052,
-  width: window.innerWidth, height: window.innerHeight,
-});
-composer.addPass(bokeh);
+// (No depth-of-field. Peripheral edge blur is done in the grade pass below so the
+//  centre — product, pedestal, central mural — stays sharp regardless of depth.)
 
 const bloom = new UnrealBloomPass(
   new THREE.Vector2(window.innerWidth, window.innerHeight),
@@ -930,16 +925,19 @@ const GradePass = {
     void main(){
       vec2 uv = vUv;
       vec2 c = uv - 0.5;
-      // (11) radial streak toward the edges — the "next environment" peeks blur outward
-      float edge = smoothstep(0.30, 0.66, abs(c.x));
+      // Peripheral (screen-position) blur — NOT depth based. The centre third
+      // stays perfectly sharp; the far left/right (and, less, top/bottom) edges
+      // smear outward like a lens edge/vignette blur, regardless of depth.
+      float blur = smoothstep(0.20, 0.52, abs(c.x));          // horizontal edges
+      blur = max(blur, smoothstep(0.34, 0.62, length(c)) * 0.6); // soften corners a touch
       vec3 col = vec3(0.0); float wsum = 0.0;
       const int N = 12;
       for(int i=0;i<N;i++){
-        float f = float(i)/float(N-1) - 0.5;
-        // radial (edge) + horizontal swipe streak — smooth, weighted taps
-        vec2 off = c * f * 0.05 * edge + vec2(uSwipe * f * 0.03, 0.0);
-        float w = 1.0 - abs(f);
-        col += texture2D(tDiffuse, uv + off).rgb * w; wsum += w;
+        float f = float(i)/float(N-1);                        // 0..1
+        // sample toward centre (c points outward) -> content smears outward onto edges
+        vec2 off = c * f * blur * 0.11 + vec2(uSwipe * f * 0.03, 0.0);
+        float w = 1.0 - f * 0.35;
+        col += texture2D(tDiffuse, uv - off).rgb * w; wsum += w;
       }
       col /= wsum;
       // warm filmic-ish color grade
@@ -1077,7 +1075,6 @@ function onResize() {
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
   composer.setSize(window.innerWidth, window.innerHeight);
-  bokeh.setSize(window.innerWidth, window.innerHeight);
   gradePass.uniforms.uRes.value.set(window.innerWidth, window.innerHeight);
 }
 window.addEventListener('resize', onResize);
@@ -1143,7 +1140,6 @@ function animate() {
   heroPos.set(parallaxGroup.position.x, 3.4, parallaxGroup.position.z + HERO_Z);
   keyTarget.position.set(parallaxGroup.position.x, 2.6, parallaxGroup.position.z + HERO_Z);
   keyLight.position.x = damp(keyLight.position.x, 1.6 + parallaxGroup.position.x, 1.0, dt);
-  bokeh.uniforms['focus'].value = damp(bokeh.uniforms['focus'].value, camera.position.distanceTo(heroPos), 2.0, dt);
 
   // (4) very slow "breathing" parallax on the painting itself
   muralTexture.offset.x = muralOffsetBaseX + Math.sin(t * 0.05) * 0.0016;
