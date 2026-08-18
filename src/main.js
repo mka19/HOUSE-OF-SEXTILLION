@@ -637,7 +637,7 @@ scene.add(parallaxGroup);
 const interactive = [];
 // Hero product dead-centre as the focal point; two quieter accents set back.
 const pedestalDefs = [
-  { x: 0.0, z: 4.2, label: 'Belts', color: 0xd8b45e, hero: true, scale: 2.4 },
+  { x: 0.0, z: 4.2, label: 'Belts', color: 0xd8b45e, hero: true, scale: 2.1 },
   { x: -10.5, z: -1.2, label: 'Bags', color: 0xc9a24c, hero: false, scale: 0.9 },
   { x: 10.5, z: -1.2, label: 'Shoes', color: 0xbf9846, hero: false, scale: 0.9 },
 ];
@@ -742,33 +742,44 @@ for (const def of pedestalDefs) {
     normalMap: stoneNormal, normalScale: new THREE.Vector2(0.25, 0.25),
     envMapIntensity: 1.05,
   });
+  // pedestal deliberately smaller (shorter + slimmer) so it never competes with
+  // the product for focus — fine if the base is slightly cropped by the frame.
+  const PED_W = 0.62, PED_H = 0.52;
   const column = new THREE.Mesh(pedestalGeo, colMat);
+  column.scale.set(PED_W, PED_H, PED_W);
   column.castShadow = true;
   column.receiveShadow = true;
   group.add(column);
+  const colTopY = 1.532 * PED_H;                 // new top of the shrunk column
 
-  // glowing top plate — the interactive target
+  // glowing top plate — the interactive target, resting on the shrunk column
   const plateMat = new THREE.MeshStandardMaterial({
     color: 0xf3dfa8, emissive: 0xc79a45, emissiveIntensity: 0.35, roughness: 0.28, metalness: 0.95,
     roughnessMap: microNoise,
   });
   const plate = new THREE.Mesh(plateGeo, plateMat);
-  plate.position.y = 1.5;
+  plate.scale.set(PED_W, 1, PED_W);
+  plate.position.y = colTopY;
   plate.castShadow = true;
   plate.receiveShadow = true;
   group.add(plate);
+  const plateTopY = colTopY + 0.072;             // plate is ~0.072 tall
 
-  // real gold product — high metalness, subtle roughness variation (not mirror plastic)
+  // real gold product — HERO — polished metal with HDRI reflections + micro
+  // roughness variation, HOVERING above the plate with a visible gap.
   const goldNoise = microNoise.clone(); goldNoise.needsUpdate = true; goldNoise.repeat.set(3, 3);
   const goldNormal = microNormal.clone(); goldNormal.needsUpdate = true; goldNormal.repeat.set(4, 4);
   const objMat = new THREE.MeshPhysicalMaterial({
-    color: def.color, roughness: 0.24, roughnessMap: goldNoise, metalness: 1.0,
-    clearcoat: 0.35, clearcoatRoughness: 0.2, envMapIntensity: 1.6,
-    normalMap: goldNormal, normalScale: new THREE.Vector2(0.08, 0.08),
+    color: def.color, metalness: 1.0,
+    roughness: 0.25, roughnessMap: goldNoise,   // subtle surface imperfection
+    envMapIntensity: 2.4,                        // real HDRI environment reflections
+    normalMap: goldNormal, normalScale: new THREE.Vector2(0.06, 0.06),
+    clearcoat: 0.0,
   });
   const r = def.hero ? 0.27 : 0.2;
   const obj = new THREE.Mesh(new THREE.TorusKnotGeometry(r, r * 0.34, 260, 40), objMat);
-  const restY = 1.5 + r + 0.18;
+  const gap = def.hero ? 0.55 : 0.38;
+  const restY = plateTopY + gap + r;             // clear floating gap above the plate
   obj.position.y = restY;
   obj.castShadow = true;
   group.add(obj);
