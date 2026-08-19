@@ -11,6 +11,7 @@ export function initTransition({ onSettled } = {}) {
   const env2 = document.getElementById('env2');
   const env2img = document.getElementById('env2img');
   const seam = document.getElementById('lightseam');
+  const voidEl = document.getElementById('voidoverlay');
   if (!showroom || !env1 || !env2) return null;
 
   // ---- Environment 2 image (real photo if present, else keep placeholder) ----
@@ -61,19 +62,34 @@ export function initTransition({ onSettled } = {}) {
 
   function apply(p) {
     const cl = p < 0 ? 0 : p > 1 ? 1 : p;
-    const e1x = -cl * W;                           // Env1 pans fully to the left
-    const e2x = (1 - cl) * W;                      // Env2 enters from the right
-    env1.style.transform = `translate3d(${e1x}px,0,0) scale(${1 - 0.015 * cl})`;
-    env2.style.transform = `translate3d(${e2x}px,0,0) scale(${1.015 - 0.015 * cl})`;
-    env1.style.opacity = String(1 - 0.12 * cl);    // Env1 gently loses dominance
+    // Curved-room turn: each environment is a wall on a cylinder. As you pull
+    // through, the current wall swings AWAY from camera (rotates on Y and recedes
+    // in Z) while the next wall swings IN from around the bend — not a flat slide.
+    const TX = W * 0.66;                            // lateral travel (less than full W: depth covers the rest)
+    const e1x = -cl * TX,        e2x = (1 - cl) * TX;
+    const e1rot = cl * 34,       e2rot = -(1 - cl) * 34;   // deg — walls angle off-axis
+    const e1z = -cl * 240,       e2z = -(1 - cl) * 240;    // px — walls recede as they turn
+    env1.style.transform =
+      `translate3d(${e1x}px,0,${e1z}px) rotateY(${e1rot}deg) scale(${1 - 0.02 * cl})`;
+    env2.style.transform =
+      `translate3d(${e2x}px,0,${e2z}px) rotateY(${e2rot}deg) scale(${1 - 0.02 * (1 - cl)})`;
+    env1.style.opacity = String(1 - 0.10 * cl);    // Env1 gently loses dominance
+    // Dark connecting "void": a dim passage you cross between the two rooms.
+    // Peaks mid-transition (cl≈0.5), near-zero at both anchors.
+    if (voidEl) voidEl.style.opacity = String(0.9 * Math.pow(Math.sin(Math.PI * cl), 1.6));
     // velocity-based directional motion blur, capped very low; never blurs product
     const b = Math.min(1.5, Math.abs(state.vel) * 0.9);
     const f = b > 0.03 ? `blur(${b.toFixed(2)}px)` : 'none';
     env1.style.filter = f; env2.style.filter = f;
-    // warm light-continuity overlay rides the moving boundary
+    // Feathered leading edge only WHILE turning; crisp again at either rest anchor.
+    const mask = cl > 0.02 && cl < 0.985
+      ? 'linear-gradient(to right, transparent 0, #000 70px, #000 100%)'
+      : 'none';
+    env2.style.webkitMaskImage = mask; env2.style.maskImage = mask;
+    // warm light-continuity overlay rides the moving boundary, read through the void
     if (seam) {
       seam.style.transform = `translate3d(${e2x}px,0,0)`;
-      seam.style.opacity = String(0.16 * Math.sin(Math.PI * cl));
+      seam.style.opacity = String(0.22 * Math.sin(Math.PI * cl));
     }
     env2.style.pointerEvents = cl > 0.995 ? 'auto' : 'none';
   }
