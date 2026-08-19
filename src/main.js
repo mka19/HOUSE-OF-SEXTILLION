@@ -415,7 +415,7 @@ const reflector = new Reflector(floorGeo, {
   clipBias: 0.003,
   textureWidth: Math.min(1024, window.innerWidth * window.devicePixelRatio),
   textureHeight: Math.min(1024, window.innerHeight * window.devicePixelRatio),
-  color: 0x38342a, // dims the mirror so it reads as polished stone, not glass
+  color: 0x1b1811, // strongly dim the planar mirror -> only a faint bounce shows through
 });
 reflector.rotation.x = -Math.PI / 2;
 reflector.position.y = 0.0;
@@ -470,16 +470,15 @@ const floorNormal = microNormal.clone(); floorNormal.needsUpdate = true; floorNo
 const marbleMat = new THREE.MeshPhysicalMaterial({
   map: marbleMaps.color,
   color: 0xcbb98a,
-  roughness: 0.34,
-  roughnessMap: floorRough,       // micro-variation so reflections aren't a perfect mirror
+  roughness: 0.62,                 // honed marble -> soft, diffused reflections
+  roughnessMap: floorRough,
   metalness: 0.0,
-  clearcoat: 1.0,
-  clearcoatRoughness: 0.28,
+  clearcoat: 0.0,                  // no wet lacquer coat (was the plastic/mirror look)
   normalMap: floorNormal,
   normalScale: new THREE.Vector2(0.12, 0.12),
-  envMapIntensity: 0.32,
+  envMapIntensity: 0.28,
   transparent: true,
-  opacity: 0.8,            // lets the mirror beneath show through
+  opacity: 0.9,                    // mostly opaque -> the sharp mirror barely reads
   depthWrite: false,
 });
 const marble = new THREE.Mesh(floorGeo, marbleMat);
