@@ -12,6 +12,8 @@ export function initTransition({ onSettled } = {}) {
   const env2img = document.getElementById('env2img');
   const seam = document.getElementById('lightseam');
   const voidEl = document.getElementById('voidoverlay');
+  const mblurG = document.getElementById('mblur-g'); // SVG feGaussianBlur node
+  const topChrome = document.querySelector('.chrome--top');
   if (!showroom || !env1 || !env2) return null;
 
   // ---- Environment 2 image (real photo if present, else keep placeholder) ----
@@ -76,27 +78,49 @@ export function initTransition({ onSettled } = {}) {
     // Curved-room turn: each environment is a wall on a cylinder. As you pull
     // through, the current wall swings AWAY from camera (rotates on Y and recedes
     // in Z) while the next wall swings IN from around the bend — not a flat slide.
-    const TX = W * 0.66;                            // lateral travel (less than full W: depth covers the rest)
+    // Full-width lateral travel so each env is cleanly OFF-screen at its rest
+    // anchor (no leak-in at cl=0/1). The curved-room "turn" (rotateY + translateZ)
+    // PEAKS mid-transition and returns to zero at both anchors — bend = sin(π·cl) —
+    // so each wall is flat when parked and only angles as it swings around the bend.
+    // (A constant rotation at rest, combined with perspective, pulled the parked
+    //  env back on-screen; this keeps the rest states perfectly flat.)
+    const TX = W;
+    const bend = Math.sin(Math.PI * cl);
     const e1x = -cl * TX,        e2x = (1 - cl) * TX;
-    const e1rot = cl * 34,       e2rot = -(1 - cl) * 34;   // deg — walls angle off-axis
-    const e1z = -cl * 240,       e2z = -(1 - cl) * 240;    // px — walls recede as they turn
+    const e1rot = bend * 34,     e2rot = -bend * 34;       // deg — angle off-axis mid-turn only
+    const e1z = -bend * 240,     e2z = -bend * 240;        // px — recede mid-turn only
     env1.style.transform =
       `translate3d(${e1x}px,0,${e1z}px) rotateY(${e1rot}deg) scale(${1 - 0.02 * cl})`;
     env2.style.transform =
       `translate3d(${e2x}px,0,${e2z}px) rotateY(${e2rot}deg) scale(${1 - 0.02 * (1 - cl)})`;
     env1.style.opacity = String(1 - 0.10 * cl);    // Env1 gently loses dominance
-    // Dark connecting "void": a dim passage you cross between the two rooms.
-    // Peaks mid-transition (cl≈0.5), near-zero at both anchors.
-    if (voidEl) voidEl.style.opacity = String(0.9 * Math.pow(Math.sin(Math.PI * cl), 1.6));
-    // velocity-based directional motion blur, capped very low; never blurs product
-    const b = Math.min(1.5, Math.abs(state.vel) * 0.9);
-    const f = b > 0.03 ? `blur(${b.toFixed(2)}px)` : 'none';
+    // Dark connecting "void": a genuine near-black passage you cross between the
+    // two rooms. The exponent < 1 WIDENS the dark plateau (a held moment of
+    // darkness), instead of a thin spike, and it reaches full black at the middle
+    // so each room reveals out of darkness like a new act — not a slide.
+    const voidAmt = Math.pow(Math.sin(Math.PI * cl), 0.55);
+    if (voidEl) voidEl.style.opacity = String(voidAmt);
+    // fade the persistent brand nav down through the dark moment so each room
+    // reveals cleanly, then it returns — reinforces the "new act" beat
+    if (topChrome) topChrome.style.opacity = cl > 0.001 && cl < 0.999 ? String(1 - voidAmt * 0.9) : '';
+    // Velocity-based DIRECTIONAL (horizontal) motion blur via the SVG filter,
+    // driven by the live drag/flick velocity. Spec range 0–1.5px.
+    const b = Math.min(1.5, Math.abs(state.vel) * 3.2);
+    if (mblurG) mblurG.setAttribute('stdDeviation', `${b.toFixed(2)} 0`);
+    const f = b > 0.03 ? 'url(#mblur)' : 'none';
     env1.style.filter = f; env2.style.filter = f;
-    // Feathered leading edge only WHILE turning; crisp again at either rest anchor.
-    const mask = cl > 0.02 && cl < 0.985
-      ? 'linear-gradient(to right, transparent 0, #000 70px, #000 100%)'
+    // Soft feathering on BOTH facing edges while turning, so the seam blends and
+    // never shows a hard vertical cut. env2's leading (left) edge and env1's
+    // trailing (right) edge each dissolve over a ~64px gradient zone.
+    const turning = cl > 0.02 && cl < 0.985;
+    const e2mask = turning
+      ? 'linear-gradient(to right, transparent 0, #000 64px, #000 100%)'
       : 'none';
-    env2.style.webkitMaskImage = mask; env2.style.maskImage = mask;
+    const e1mask = turning
+      ? 'linear-gradient(to right, #000 0, #000 calc(100% - 64px), transparent 100%)'
+      : 'none';
+    env2.style.webkitMaskImage = e2mask; env2.style.maskImage = e2mask;
+    env1.style.webkitMaskImage = e1mask; env1.style.maskImage = e1mask;
     // warm light-continuity overlay rides the moving boundary, read through the void
     if (seam) {
       seam.style.transform = `translate3d(${e2x}px,0,0)`;

@@ -17,13 +17,13 @@ import { initTransition } from './transition.js';
 const CFG = {
   wallRadius: 18,
   wallHeight: 12,
-  wallArc: Math.PI * 0.82,      // ~148° — fits more of the mural's cast in frame
+  wallArc: Math.PI * 0.60,      // ~108° — tight, cinematic central framing (was 148°)
   ceilingY: 7.7,
-  exposure: 0.85,
+  exposure: 0.94,
   envIntensity: 1.05,
   fogColor: 0x6a5836,
   fogDensity: 0.009,
-  bloom: { strength: 0.16, radius: 0.6, threshold: 0.96 },
+  bloom: { strength: 0.22, radius: 0.6, threshold: 0.90 },
   // telephoto + close = the hero feels substantial; background compresses behind it
   fov: 38,
   camera: { base: new THREE.Vector3(0, 3.5, 14.6) },
@@ -195,7 +195,9 @@ try {
 // The uploaded reference (public/MURAL.jpeg) is the whole room. Crop just the
 // painted wall band so our own 3D ceiling + floor frame it, instead of mapping
 // a room-inside-a-room. Fractions are of the source image (1536x1024).
-const MURAL_CROP = { top: 0.185, bottom: 0.795, left: 0.0, right: 1.0 };
+// left/right cropped in from the full width to drop the outer mural panels, so
+// only the central panels show — a tighter, more focused composition.
+const MURAL_CROP = { top: 0.185, bottom: 0.795, left: 0.19, right: 0.81 };
 
 // A cooler "next environment" glimpsed through haze — painterly & low-contrast,
 // so it reads as another room beyond, not a flat vector shape.
@@ -261,34 +263,42 @@ function buildWallCanvas(img) {
   c.width = Wc; c.height = Hc;
   const x = c.getContext('2d');
 
-  // side scenes first
-  drawNextScene(x, 0, mx + 4, Hc, false);
-  drawNextScene(x, mx + muralW - 4, Wc - (mx + muralW) + 4, Hc, true);
+  // Warm gold gallery wall on the side arcs — the mural reads as a tightly-framed
+  // artwork hung on the maison's own wall (Cartier-style), not a room-inside-a-room.
+  function goldWall(x0, w) {
+    const wall = x.createLinearGradient(0, 0, 0, Hc);
+    wall.addColorStop(0.0, '#2a2012');
+    wall.addColorStop(0.42, '#4a3a1f');
+    wall.addColorStop(0.72, '#3c2f19');
+    wall.addColorStop(1.0, '#20180d');
+    x.fillStyle = wall; x.fillRect(x0, 0, w, Hc);
+    // faint vertical panel mouldings so the wall has quiet gilded architecture
+    x.strokeStyle = 'rgba(210,180,120,0.10)'; x.lineWidth = 2;
+    for (let px = x0 + 60; px < x0 + w - 20; px += 120) {
+      x.beginPath(); x.moveTo(px, Hc * 0.06); x.lineTo(px, Hc * 0.94); x.stroke();
+    }
+  }
+  goldWall(0, mx + 4);
+  goldWall(mx + muralW - 4, Wc - (mx + muralW) + 4);
   // real mural, centred at correct aspect
   x.drawImage(img, sx, sy, sw, sh, mx, 0, muralW, Hc);
 
-  // wide soft crossfade at each seam + a whisper of gilded moulding, so the
-  // next-scene melts into the mural on the curve rather than hard-cutting
+  // gilded frame moulding + soft inner shadow at each edge of the mural, so it
+  // sits in a real frame on the gold wall rather than hard-cutting into it
   for (const seam of [mx, mx + muralW]) {
-    const bw = 150;
-    const blend = x.createLinearGradient(seam - bw, 0, seam + bw, 0);
-    blend.addColorStop(0, 'rgba(150,156,144,0.0)');
-    blend.addColorStop(0.5, 'rgba(140,146,132,0.34)');
-    blend.addColorStop(1, 'rgba(150,156,144,0.0)');
-    x.fillStyle = blend; x.fillRect(seam - bw, 0, bw * 2, Hc);
-    const g = x.createLinearGradient(seam - 6, 0, seam + 6, 0);
-    g.addColorStop(0, 'rgba(60,44,18,0)');
-    g.addColorStop(0.5, 'rgba(228,208,150,0.5)');
-    g.addColorStop(1, 'rgba(60,44,18,0)');
-    x.fillStyle = g; x.fillRect(seam - 6, 0, 12, Hc);
+    const g = x.createLinearGradient(seam - 10, 0, seam + 10, 0);
+    g.addColorStop(0.0, 'rgba(20,14,6,0.55)');
+    g.addColorStop(0.5, 'rgba(232,210,150,0.85)');   // bright gilt bead
+    g.addColorStop(1.0, 'rgba(20,14,6,0.55)');
+    x.fillStyle = g; x.fillRect(seam - 10, 0, 20, Hc);
   }
-  // atmospheric haze fading the far edges into the curve
-  const edge = x.createLinearGradient(0, 0, Wc, 0);
-  edge.addColorStop(0, 'rgba(175,180,168,0.5)');
-  edge.addColorStop(0.12, 'rgba(175,180,168,0)');
-  edge.addColorStop(0.88, 'rgba(175,180,168,0)');
-  edge.addColorStop(1, 'rgba(175,180,168,0.5)');
-  x.fillStyle = edge; x.fillRect(0, 0, Wc, Hc);
+  // soft inner vignette on the mural so its own edges fall into the frame shadow
+  const inner = x.createLinearGradient(mx, 0, mx + muralW, 0);
+  inner.addColorStop(0.0, 'rgba(20,14,6,0.45)');
+  inner.addColorStop(0.06, 'rgba(20,14,6,0)');
+  inner.addColorStop(0.94, 'rgba(20,14,6,0)');
+  inner.addColorStop(1.0, 'rgba(20,14,6,0.45)');
+  x.fillStyle = inner; x.fillRect(mx, 0, muralW, Hc);
   return c;
 }
 
@@ -592,7 +602,7 @@ wallWashR.target.position.set(11, 2.5, -CFG.wallRadius + 2);
 scene.add(wallWashR); scene.add(wallWashR.target);
 
 // Real key light over the hero — soft-shadow casting + physical falloff (decay=2).
-const keyLight = new THREE.SpotLight(0xfff1d2, 950, 26, Math.PI / 7, 0.7, 2);
+const keyLight = new THREE.SpotLight(0xfff1d2, 1150, 26, Math.PI / 7, 0.7, 2);
 keyLight.position.set(1.6, 8.4, 6.2);
 keyLight.castShadow = true;
 keyLight.shadow.mapSize.set(1024, 1024);
@@ -860,31 +870,50 @@ passSprite.position.set(0, 4.4, -CFG.wallRadius + 0.5);
 scene.add(passSprite);
 const passState = { next: 8, active: false, t0: 0, dur: 7 };
 
-// (7) Cursor "circuit" decal — thin glowing lines in a small radius, fading out.
+// (7) Circuit / network floor — a full-floor lattice of thin glowing gold lines
+// connecting small circular nodes, that lights up in a pool around the cursor and
+// fades as the cursor moves away. A static plane covers the floor; the cursor is a
+// world-space uniform, so the glow tracks the cursor over a fixed lattice (the
+// network stays put; only the illumination moves), which reads as "alive" not gimmicky.
+const CIRCUIT_HALF = CFG.wallRadius;            // plane spans the whole floor
 const circuitMat = new THREE.ShaderMaterial({
   transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-  uniforms: { uTime: { value: 0 }, uStrength: { value: 0 } },
+  uniforms: {
+    uTime: { value: 0 },
+    uStrength: { value: 0 },                    // global energy (cursor movement)
+    uCursor: { value: new THREE.Vector2(0, 0) },// cursor position on the floor (world x,z)
+    uHalf: { value: CIRCUIT_HALF },
+  },
   vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);} `,
   fragmentShader: `
-    varying vec2 vUv; uniform float uTime; uniform float uStrength;
+    varying vec2 vUv;
+    uniform float uTime, uStrength, uHalf; uniform vec2 uCursor;
+    float lineMask(float x, float w){ return smoothstep(w, 0.0, abs(x)); }
     void main(){
-      vec2 p = vUv*2.0-1.0;
-      float r = length(p);
-      float a = atan(p.y,p.x);
-      float fade = smoothstep(1.0,0.15,r) * uStrength;   // fade to edge + overall strength
-      // concentric rings drifting outward
-      float rings = smoothstep(0.06,0.0,abs(fract(r*4.0 - uTime*0.25)-0.5)-0.44);
-      // radial spokes
-      float spokes = smoothstep(0.06,0.0,abs(fract(a/6.2831*12.0)-0.5)-0.46);
-      // little travelling node
-      float node = smoothstep(0.09,0.0,abs(r-0.55-0.18*sin(uTime*1.3)));
-      float lines = clamp(rings*0.7 + spokes*0.45 + node*0.6, 0.0, 1.0);
-      vec3 col = mix(vec3(0.86,0.72,0.36), vec3(1.0,0.92,0.6), lines);
-      gl_FragColor = vec4(col, lines*fade*0.5);
+      // map the plane's uv to world floor coordinates (x,z)
+      vec2 world = (vUv - 0.5) * (uHalf * 2.0);
+      float dCur = distance(world, uCursor);
+      float prox = smoothstep(6.5, 0.0, dCur);        // bright pool radius ~6.5 units
+      float energy = prox * uStrength;
+      // lattice: nodes at cell centres, thin lines through them (a connected grid)
+      const float N = 8.0;
+      vec2 cell = fract(vUv * N) - 0.5;
+      vec2 id   = floor(vUv * N);
+      float lines = max(lineMask(cell.x, 0.026), lineMask(cell.y, 0.026)) * 0.95;
+      float node  = smoothstep(0.10, 0.03, length(cell));
+      // a soft pulse travelling out from the cursor along the lattice
+      float pulse = 0.5 + 0.5 * sin(uTime * 2.2 - dCur * 1.1 - (id.x + id.y) * 0.35);
+      float net = lines + node * (1.1 + 0.5 * pulse);
+      // fade the lattice out toward the very edge of the floor
+      float edge = smoothstep(1.0, 0.82, length(vUv - 0.5) * 2.0);
+      float a = net * energy * edge;
+      // warm gold, brightening to near-white on the nodes / pulse crests
+      vec3 gold = mix(vec3(0.92,0.70,0.30), vec3(1.0,0.94,0.66), clamp(node + pulse*0.25, 0.0, 1.0));
+      gl_FragColor = vec4(gold, clamp(a, 0.0, 1.0) * 1.15);
     }
   `,
 });
-const circuit = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 3.6), circuitMat);
+const circuit = new THREE.Mesh(new THREE.PlaneGeometry(CIRCUIT_HALF * 2, CIRCUIT_HALF * 2), circuitMat);
 circuit.rotation.x = -Math.PI / 2;
 circuit.position.y = 0.03;
 circuit.visible = false;
@@ -938,17 +967,18 @@ const GradePass = {
         col += texture2D(tDiffuse, uv - off).rgb * w; wsum += w;
       }
       col /= wsum;
-      // --- restrained, cinematic luxury grade (not video-game gold) ---
-      col = pow(col, vec3(1.02));                     // gentle filmic contrast
+      // --- rich, punchy luxury grade — bright highlights, deep blacks, real pop ---
+      // filmic S-curve contrast pivoted at mid-grey (stronger than the old 1.02)
+      col = clamp((col - 0.5) * 1.16 + 0.5, 0.0, 1.0);
       float l = dot(col, vec3(0.2126,0.7152,0.0722));
       // split-tone: cool teal/blue in the shadows, soft-neutral warm in highlights
       vec3 shadowTint = vec3(0.92, 0.99, 1.07);
-      vec3 highTint   = vec3(1.015, 1.0, 0.975);
+      vec3 highTint   = vec3(1.02, 1.0, 0.97);
       col *= mix(shadowTint, highTint, smoothstep(0.05, 0.55, l));
-      // pull saturation back for a muted, expensive tone
-      col = mix(vec3(l), col, 0.78);
-      // very slight black lift -> matte, filmic base
-      col = col * 0.97 + 0.008;
+      // richer saturation so the golds actually read gold (was a muted 0.78)
+      col = mix(vec3(l), col, 0.90);
+      // deep blacks: almost no lift, a hair of gain so highlights punch
+      col = col * 0.99 + 0.002;
       // strong, wide, horizontally-weighted vignette — keep only the centre third
       // bright, drop the outer ~35% (all edges) into shadow like a spotlit room
       vec2 vv = c * vec2(1.6, 1.18);
@@ -1164,9 +1194,10 @@ function animate() {
   circuitState.strength = damp(circuitState.strength, circuitState.energy, 4, dt);
   circuit.visible = circuitState.strength > 0.01;
   if (circuit.visible) {
-    circuit.position.set(circuitState.pos.x, 0.03, circuitState.pos.z);
+    // the lattice plane is static; only the illuminated cursor pool moves over it
     circuitMat.uniforms.uTime.value = t;
     circuitMat.uniforms.uStrength.value = circuitState.strength;
+    circuitMat.uniforms.uCursor.value.set(circuitState.pos.x, circuitState.pos.z);
   }
 
   // (6) idle ambient floor pool — breathes on its own, independent of the mouse

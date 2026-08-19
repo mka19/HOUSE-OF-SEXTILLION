@@ -46,6 +46,15 @@
       <div id="lightseam" aria-hidden="true"></div>
     </div>
 
+    <!-- Directional (horizontal-only) motion-blur filter, driven by drag velocity.
+         stdDeviation="x 0" blurs on X only, so fast movement smears sideways like
+         a cinematic pan — not the isotropic softness of CSS blur(). -->
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+      <filter id="mblur" x="-10%" y="-10%" width="120%" height="120%">
+        <feGaussianBlur id="mblur-g" in="SourceGraphic" stdDeviation="0 0" />
+      </filter>
+    </svg>
+
     <!-- Persistent brand chrome (above both environments) -->
     <header class="chrome chrome--top">
       <div class="chrome__brand">HOUSE OF SEXTILLION</div>
