@@ -81,3 +81,15 @@ just the panorama band rather than the full room).
 
 All lighting/mood knobs live in the `CFG` object at the top of `src/main.js`
 (exposure, env intensity, fog, bloom, camera). Adjust and reload.
+
+## Environment transition (drag)
+
+The site is a continuous two-environment exhibition. **Environment 1** is the live 3D
+golden scene; **Environment 2** is a flat showroom image. Click-drag left to pull Env 2 in
+from the right (weighted, inertial, critically-damped settle — no bounce, no slider feel),
+drag right to return. All movement derives from one `progress` value in `src/transition.js`.
+
+Drop your showroom photo at **`public/SHOWROOM2.jpg`** (or `.jpeg` / `.png`) and it loads as
+Environment 2; until then a warm placeholder gradient stands in. Product hotspot positions
+for the illuminated-recess hover live in `HOTSPOTS` in `src/transition.js` — tune them to your
+photo once it's in.

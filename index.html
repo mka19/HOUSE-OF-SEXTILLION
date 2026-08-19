@@ -16,13 +16,35 @@
       <div class="loader__bar"><span id="loader-fill" class="loader__fill"></span></div>
     </div>
 
-    <!-- WebGL canvas -->
-    <canvas id="scene"></canvas>
+    <!-- Continuous exhibition: two environments on one horizontal track -->
+    <div id="showroom">
+      <!-- Environment 1 — the live 3D golden panorama -->
+      <section class="env" id="env1" aria-label="Environment one — The Golden Panorama">
+        <canvas id="scene"></canvas>
+        <div class="grade" aria-hidden="true"></div>
+        <footer class="chrome chrome--bottom">
+          <div class="chrome__eyebrow">The Golden Panorama</div>
+          <h1 class="chrome__title">A room made of light</h1>
+          <p class="chrome__lede">Real-time atelier · drag left to enter the showroom</p>
+        </footer>
+      </section>
 
-    <!-- Vignette + grain overlay for cinematic depth -->
-    <div class="grade" aria-hidden="true"></div>
+      <!-- Environment 2 — the atelier showroom (flat image) -->
+      <section class="env" id="env2" aria-label="Environment two — The Atelier Showroom">
+        <div class="env2__img" id="env2img"></div>
+        <div class="env2__hotspots" id="env2hotspots" aria-hidden="true"></div>
+        <footer class="chrome chrome--bottom">
+          <div class="chrome__eyebrow">The Atelier</div>
+          <h1 class="chrome__title">The Collection</h1>
+          <p class="chrome__lede">Bags · Belts · Shoes — drag right to return</p>
+        </footer>
+      </section>
 
-    <!-- Brand chrome -->
+      <!-- warm light-continuity overlay travelling with the boundary -->
+      <div id="lightseam" aria-hidden="true"></div>
+    </div>
+
+    <!-- Persistent brand chrome (above both environments) -->
     <header class="chrome chrome--top">
       <div class="chrome__brand">HOUSE OF SEXTILLION</div>
       <nav class="chrome__nav">
@@ -32,12 +54,6 @@
         <a href="#" class="nav-link nav-link--muted">Maison</a>
       </nav>
     </header>
-
-    <footer class="chrome chrome--bottom">
-      <div class="chrome__eyebrow">The Golden Panorama</div>
-      <h1 class="chrome__title">A room made of light</h1>
-      <p class="chrome__lede">Real-time atelier · move your cursor to shape the light</p>
-    </footer>
 
     <div id="tooltip" class="tooltip" aria-hidden="true"></div>
 

@@ -9,6 +9,7 @@ import { GammaCorrectionShader } from 'three/examples/jsm/shaders/GammaCorrectio
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import hdriUrl from '@pmndrs/assets/hdri/lobby.exr.js';
 import { drawMuralCanvas } from './mural.js';
+import { initTransition } from './transition.js';
 
 /* -------------------------------------------------------------------------- */
 /*  Tunables — kept together so lighting/mood can be dialled in quickly.        */
@@ -984,6 +985,7 @@ wallPlane.position.y = CFG.wallHeight / 2;
 scene.add(wallPlane);
 
 function onPointerMove(e) {
+  if (window.__envDragging || window.__activeEnv === 2) return; // suspended while moving between / inside Env2
   pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
   pointer.y = -((e.clientY / window.innerHeight) * 2 - 1);
   lastInteract = performance.now();
@@ -1012,6 +1014,7 @@ function findGroup(obj) {
   return interactive.find((g) => g.userData.obj === obj) || null;
 }
 function onClick() {
+  if (window.__envDragging || window.__activeEnv === 2) return;
   if (hovered) hovered.userData.click = 1.0;
 }
 window.addEventListener('pointermove', onPointerMove);
@@ -1058,14 +1061,8 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'ArrowRight') cycleProduct(1);
   else if (e.key === 'ArrowLeft') cycleProduct(-1);
 });
-// horizontal drag / touch swipe
-let dragX = null;
-window.addEventListener('pointerdown', (e) => { dragX = e.clientX; });
-window.addEventListener('pointerup', (e) => {
-  if (dragX === null) return;
-  const dx = e.clientX - dragX; dragX = null;
-  if (Math.abs(dx) > 90) cycleProduct(dx < 0 ? 1 : -1);
-});
+// (horizontal drag is reserved for the environment transition — see transition.js;
+//  products cycle via the nav links and arrow keys.)
 
 /* -------------------------------------------------------------------------- */
 /*  Resize                                                                      */
@@ -1105,6 +1102,9 @@ function damp(current, target, lambda, dt) {
 
 function animate() {
   requestAnimationFrame(animate);
+  // parked on Environment 2 (and not dragging back) — the 3D scene is off-screen,
+  // so skip rendering it entirely for performance. Resumes on drag-back.
+  if (window.__activeEnv === 2 && !window.__envDragging) return;
   const dt = Math.min(clock.getDelta(), 0.05);
   const t = clock.elapsedTime;
 
@@ -1243,3 +1243,13 @@ animate();
 
 // Expose a couple of handles for the screenshot/tuning harness.
 window.__scene = { scene, camera, renderer, CFG, muralMat, marbleMat, bloom };
+
+// Premium drag transition between Environment 1 (this 3D scene) and Environment 2.
+window.__activeEnv = 1;
+initTransition({
+  onSettled: (env) => {
+    // returning to Env1 restores its live pointer interactions automatically
+    // (onPointerMove/onClick early-out on __activeEnv === 2)
+    document.querySelector('.chrome--top')?.classList.toggle('on-env2', env === 2);
+  },
+});
