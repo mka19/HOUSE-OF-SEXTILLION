@@ -71,7 +71,9 @@ html, body {
   background-size: cover;
   background-position: center;
 }
-.env2__img.has-photo { background-image: var(--env2-src); }
+/* .has-photo is a state hook; the photo URL is applied inline by transition.js
+   (a CSS var would resolve url() relative to the stylesheet and 404 in prod). */
+.env2__img.has-photo { background-size: cover; background-position: center; }
 
 #lightseam {
   position: absolute;

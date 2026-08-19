@@ -85,11 +85,20 @@ All lighting/mood knobs live in the `CFG` object at the top of `src/main.js`
 ## Environment transition (drag)
 
 The site is a continuous two-environment exhibition. **Environment 1** is the live 3D
-golden scene; **Environment 2** is a flat showroom image. Click-drag left to pull Env 2 in
-from the right (weighted, inertial, critically-damped settle — no bounce, no slider feel),
-drag right to return. All movement derives from one `progress` value in `src/transition.js`.
+golden scene; **Environment 2** is a flat showroom image (`public/SHOWROOM2.jpg`). Click-drag
+left to pull Env 2 in from the right, drag right to return. All movement derives from one
+`progress` value in `src/transition.js`, and the two rooms read as walls of one **circular
+room**: as you pull through, the current wall rotates and recedes away (`rotateY` + `translateZ`
+under the `#showroom` `perspective`) while the next wall swings in from around the bend — not a
+flat slide. Midway you cross a dim **connecting void** (`#voidoverlay`, opacity peaks at the
+half-way point), so it feels like turning a corner through a darker passage between the two
+sections. The release is a critically-damped settle — weighted and inertial, no bounce, no
+slider feel.
 
 Drop your showroom photo at **`public/SHOWROOM2.jpg`** (or `.jpeg` / `.png`) and it loads as
-Environment 2; until then a warm placeholder gradient stands in. Product hotspot positions
-for the illuminated-recess hover live in `HOTSPOTS` in `src/transition.js` — tune them to your
-photo once it's in.
+Environment 2; until then a warm placeholder gradient stands in. The photo URL is applied
+**inline** by `src/transition.js` (a CSS `url()` custom property would resolve relative to the
+bundled stylesheet and 404 in the production build). The single-file artifact inlines the photo
+as `window.__SHOWROOM2_DATA_URI`. Product hotspot positions for the illuminated-recess hover
+live in `HOTSPOTS` in `src/transition.js` — tuned to the supplied photo at ~3:2; re-tune if you
+swap it or target a very different aspect ratio.

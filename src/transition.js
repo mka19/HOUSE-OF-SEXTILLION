@@ -15,10 +15,21 @@ export function initTransition({ onSettled } = {}) {
   if (!showroom || !env1 || !env2) return null;
 
   // ---- Environment 2 image (real photo if present, else keep placeholder) ----
-  ['./SHOWROOM2.jpg', './SHOWROOM2.jpeg', './SHOWROOM2.png'].forEach((src) => {
+  // Single-file artifact inlines the photo as a data URI; the served build
+  // loads it from public/. Try the inlined one first, then the file candidates.
+  const env2Sources = [];
+  if (window.__SHOWROOM2_DATA_URI) env2Sources.push(window.__SHOWROOM2_DATA_URI);
+  env2Sources.push('./SHOWROOM2.jpg', './SHOWROOM2.jpeg', './SHOWROOM2.png');
+  let env2Loaded = false;
+  env2Sources.forEach((src) => {
     const img = new Image();
     img.onload = () => {
-      env2img.style.setProperty('--env2-src', `url("${src}")`);
+      if (env2Loaded) return;
+      env2Loaded = true;
+      // Set the resolved absolute URL directly on the element. A CSS custom
+      // property resolves url() relative to the STYLESHEET (…/assets/), which
+      // 404s in the production build; img.src is already document-resolved.
+      env2img.style.backgroundImage = `url("${img.src}")`;
       env2img.classList.add('has-photo');
       buildHotspots();
     };
@@ -171,9 +182,15 @@ export function initTransition({ onSettled } = {}) {
   // ---- Env2 product hotspots (item 18): localized illuminated-recess brighten ----
   // Approximate positions over the reference showroom; tune to the real photo.
   const HOTSPOTS = [
-    { x: 12, y: 45, s: 20 }, { x: 24, y: 40, s: 16 }, { x: 37, y: 45, s: 15 },
-    { x: 50, y: 33, s: 24 }, { x: 63, y: 40, s: 15 }, { x: 74, y: 40, s: 16 },
-    { x: 88, y: 42, s: 18 },
+    { x: 15, y: 72, s: 15 },  // gold sneakers, front left
+    { x: 13, y: 40, s: 13 },  // white loafers, left niche
+    { x: 29, y: 46, s: 14 },  // black + orange backpack
+    { x: 50, y: 34, s: 18 },  // orange briefcase, centre niche
+    { x: 53, y: 56, s: 13 },  // belt with B buckle, centre
+    { x: 68, y: 40, s: 11 },  // small red bag, centre niche
+    { x: 82, y: 40, s: 13 },  // black shoes, right niche
+    { x: 83, y: 59, s: 13 },  // brown belt, right
+    { x: 82, y: 85, s: 14 },  // orange sandals, front right
   ];
   function buildHotspots() {
     const host = document.getElementById('env2hotspots');

@@ -1,0 +1,20 @@
+import { chromium } from 'playwright-core';
+import { readFileSync, writeFileSync } from 'fs';
+const exe='/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const b=await chromium.launch({executablePath:exe,args:['--no-sandbox']});
+const p=await b.newPage();
+const src=readFileSync('public/publicSHOWROOM2.jpg.png').toString('base64');
+const dataUrl='data:image/png;base64,'+src;
+const out=await p.evaluate(async (du)=>{
+  const img=new Image(); img.src=du; await img.decode();
+  const targetW=2560; const scale=targetW/img.naturalWidth;
+  const c=document.createElement('canvas');
+  c.width=targetW; c.height=Math.round(img.naturalHeight*scale);
+  const ctx=c.getContext('2d'); ctx.imageSmoothingQuality='high';
+  ctx.drawImage(img,0,0,c.width,c.height);
+  return { data:c.toDataURL('image/jpeg',0.86), w:c.width, h:c.height, ow:img.naturalWidth, oh:img.naturalHeight };
+}, dataUrl);
+const b64=out.data.split(',')[1];
+writeFileSync('public/SHOWROOM2.jpg', Buffer.from(b64,'base64'));
+console.log(`resized ${out.ow}x${out.oh} -> ${out.w}x${out.h}, bytes=${Buffer.from(b64,'base64').length}`);
+await b.close();

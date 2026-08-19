@@ -6,6 +6,7 @@ const jsFile = fs.readdirSync('dist/assets').find(f => f.endsWith('.js'));
 const css = fs.readFileSync(`dist/assets/${cssFile}`, 'utf8');
 const js = fs.readFileSync(`dist/assets/${jsFile}`, 'utf8');
 const muralB64 = fs.readFileSync('public/MURAL.jpeg').toString('base64');
+const showroomB64 = fs.readFileSync('public/SHOWROOM2.jpg').toString('base64');
 
 // body inner markup (strip the module <script src> tag and any <link>)
 let body = html.split('<body>')[1].split('</body>')[0];
@@ -15,7 +16,8 @@ const out = `<style>
 ${css}
 </style>
 ${body}
-<script>window.__MURAL_DATA_URI="data:image/jpeg;base64,${muralB64}";</script>
+<script>window.__MURAL_DATA_URI="data:image/jpeg;base64,${muralB64}";
+window.__SHOWROOM2_DATA_URI="data:image/jpeg;base64,${showroomB64}";</script>
 <script type="module">
 ${js}
 </script>
