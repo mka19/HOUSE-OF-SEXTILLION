@@ -764,15 +764,13 @@ for (const def of pedestalDefs) {
   group.add(plate);
   const plateTopY = colTopY + 0.072;             // plate is ~0.072 tall
 
-  // real gold product — HERO — polished metal with HDRI reflections + micro
-  // roughness variation, HOVERING above the plate with a visible gap.
-  const goldNoise = microNoise.clone(); goldNoise.needsUpdate = true; goldNoise.repeat.set(3, 3);
-  const goldNormal = microNormal.clone(); goldNormal.needsUpdate = true; goldNormal.repeat.set(4, 4);
+  // real gold product — HERO — highly polished metal. Low uniform roughness (no
+  // roughness/normal micro-variation) so specular reflections stay tight: small,
+  // very bright hot-points where light reflects directly, darker elsewhere.
   const objMat = new THREE.MeshPhysicalMaterial({
     color: def.color, metalness: 1.0,
-    roughness: 0.25, roughnessMap: goldNoise,   // subtle surface imperfection
+    roughness: 0.08,                             // sharp, tight specular
     envMapIntensity: 2.4,                        // real HDRI environment reflections
-    normalMap: goldNormal, normalScale: new THREE.Vector2(0.06, 0.06),
     clearcoat: 0.0,
   });
   const r = def.hero ? 0.27 : 0.2;
