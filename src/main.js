@@ -940,11 +940,17 @@ const GradePass = {
         col += texture2D(tDiffuse, uv - off).rgb * w; wsum += w;
       }
       col /= wsum;
-      // warm filmic-ish color grade
-      col = pow(col, vec3(0.96));
-      col *= vec3(1.045, 1.005, 0.955);
-      float l = dot(col, vec3(0.299,0.587,0.114));
-      col = mix(vec3(l), col, 1.04);                 // gentle saturation
+      // --- restrained, cinematic luxury grade (not video-game gold) ---
+      col = pow(col, vec3(1.02));                     // gentle filmic contrast
+      float l = dot(col, vec3(0.2126,0.7152,0.0722));
+      // split-tone: cool teal/blue in the shadows, soft-neutral warm in highlights
+      vec3 shadowTint = vec3(0.92, 0.99, 1.07);
+      vec3 highTint   = vec3(1.015, 1.0, 0.975);
+      col *= mix(shadowTint, highTint, smoothstep(0.05, 0.55, l));
+      // pull saturation back for a muted, expensive tone
+      col = mix(vec3(l), col, 0.78);
+      // very slight black lift -> matte, filmic base
+      col = col * 0.97 + 0.008;
       // strong, wide, horizontally-weighted vignette — keep only the centre third
       // bright, drop the outer ~35% (all edges) into shadow like a spotlit room
       vec2 vv = c * vec2(1.6, 1.18);
