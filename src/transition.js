@@ -5,38 +5,20 @@
 // through — weighted, inertial, no bounce, no slider feel. No external deps: the
 // release is a custom critically-damped spring.
 
-export function initTransition({ onSettled } = {}) {
+export function initTransition({ onSettled, onApproachEnv2, onLeaveEnv2 } = {}) {
   const showroom = document.getElementById('showroom');
   const env1 = document.getElementById('env1');
   const env2 = document.getElementById('env2');
-  const env2img = document.getElementById('env2img');
   const seam = document.getElementById('lightseam');
   const voidEl = document.getElementById('voidoverlay');
   const mblurG = document.getElementById('mblur-g'); // SVG feGaussianBlur node
   const topChrome = document.querySelector('.chrome--top');
   if (!showroom || !env1 || !env2) return null;
 
-  // ---- Environment 2 image (real photo if present, else keep placeholder) ----
-  // Single-file artifact inlines the photo as a data URI; the served build
-  // loads it from public/. Try the inlined one first, then the file candidates.
-  const env2Sources = [];
-  if (window.__SHOWROOM2_DATA_URI) env2Sources.push(window.__SHOWROOM2_DATA_URI);
-  env2Sources.push('./SHOWROOM2.jpg', './SHOWROOM2.jpeg', './SHOWROOM2.png');
-  let env2Loaded = false;
-  env2Sources.forEach((src) => {
-    const img = new Image();
-    img.onload = () => {
-      if (env2Loaded) return;
-      env2Loaded = true;
-      // Set the resolved absolute URL directly on the element. A CSS custom
-      // property resolves url() relative to the STYLESHEET (…/assets/), which
-      // 404s in the production build; img.src is already document-resolved.
-      env2img.style.backgroundImage = `url("${img.src}")`;
-      env2img.classList.add('has-photo');
-      buildHotspots();
-    };
-    img.src = src;
-  });
+  // Environment 2 is a real 3D scene built ON DEMAND (see main.js): created the
+  // moment a drag toward it begins (so it's ready by the time you arrive) and
+  // disposed once you've settled back on Env1 — only the active/approached
+  // environment lives in memory.
 
   const state = { progress: 0, target: 0, vel: 0, dragging: false, animating: false };
   window.__trans = state;
@@ -154,6 +136,8 @@ export function initTransition({ onSettled } = {}) {
     document.body.classList.toggle('at-env2', atEnv2);
     window.__activeEnv = atEnv2 ? 2 : 1;
     env2.style.pointerEvents = atEnv2 ? 'auto' : 'none';
+    // parked back on Env1 -> tear down Env2 so only the active env holds memory
+    if (!atEnv2) onLeaveEnv2 && onLeaveEnv2();
     onSettled && onSettled(atEnv2 ? 2 : 1);
   }
 
@@ -173,6 +157,10 @@ export function initTransition({ onSettled } = {}) {
       if (Math.abs(dx) < THRESH) return;
       if (Math.abs(dx) <= Math.abs(dy)) return;    // vertical intent -> let it be
       captured = true; setDragging(true);
+      // starting a drag from Env1 -> begin building Env2 now, so its geometry,
+      // textures and lights are ready by the time we arrive (Cartier-style
+      // approach-preload). Idempotent on the main.js side.
+      if (startProgress < 0.5) onApproachEnv2 && onApproachEnv2();
     }
     // drag left (downX - x > 0) advances toward Env2; drag right retreats
     const raw = startProgress + (downX - e.clientX) / DRAG_DIST();
@@ -202,31 +190,6 @@ export function initTransition({ onSettled } = {}) {
   window.addEventListener('pointermove', onMove, { passive: true });
   window.addEventListener('pointerup', onUp);
   window.addEventListener('pointercancel', onUp);
-
-  // ---- Env2 product hotspots (item 18): localized illuminated-recess brighten ----
-  // Approximate positions over the reference showroom; tune to the real photo.
-  const HOTSPOTS = [
-    { x: 15, y: 72, s: 15 },  // gold sneakers, front left
-    { x: 13, y: 40, s: 13 },  // white loafers, left niche
-    { x: 29, y: 46, s: 14 },  // black + orange backpack
-    { x: 50, y: 34, s: 18 },  // orange briefcase, centre niche
-    { x: 53, y: 56, s: 13 },  // belt with B buckle, centre
-    { x: 68, y: 40, s: 11 },  // small red bag, centre niche
-    { x: 82, y: 40, s: 13 },  // black shoes, right niche
-    { x: 83, y: 59, s: 13 },  // brown belt, right
-    { x: 82, y: 85, s: 14 },  // orange sandals, front right
-  ];
-  function buildHotspots() {
-    const host = document.getElementById('env2hotspots');
-    if (!host || host.childElementCount) return;
-    for (const h of HOTSPOTS) {
-      const el = document.createElement('div');
-      el.className = 'hotspot';
-      el.style.left = h.x + '%'; el.style.top = h.y + '%';
-      el.style.width = h.s + 'vw'; el.style.height = h.s + 'vw';
-      host.appendChild(el);
-    }
-  }
 
   return state;
 }

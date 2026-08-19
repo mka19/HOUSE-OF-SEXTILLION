@@ -61,19 +61,21 @@ html, body {
   mask-image: linear-gradient(to right, transparent 0, #000 70px, #000 100%);
   pointer-events: none;
 }
-.env2__img {
+/* Env2 live 3D canvas (built on demand). A warm gradient shows behind it until
+   the scene's first frame paints, so there's never a flash of empty black. */
+.env2__canvas {
   position: absolute;
   inset: 0;
-  /* warm placeholder gradient sits behind; the real photo loads on top */
-  background:
-    radial-gradient(120% 80% at 50% 20%, rgba(255,244,222,0.9), rgba(0,0,0,0) 60%),
-    linear-gradient(180deg, #d9c39a 0%, #caa96f 45%, #b98f4e 100%);
-  background-size: cover;
-  background-position: center;
+  width: 100vw;
+  height: 100vh;
+  display: block;
+  touch-action: none;
 }
-/* .has-photo is a state hook; the photo URL is applied inline by transition.js
-   (a CSS var would resolve url() relative to the stylesheet and 404 in prod). */
-.env2__img.has-photo { background-size: cover; background-position: center; }
+#env2 {
+  background:
+    radial-gradient(120% 80% at 50% 22%, rgba(255,244,222,0.55), rgba(0,0,0,0) 60%),
+    linear-gradient(180deg, #2a2114 0%, #1a140c 55%, #0d0a06 100%);
+}
 
 #lightseam {
   position: absolute;

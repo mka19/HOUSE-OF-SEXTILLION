@@ -10,6 +10,7 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import hdriUrl from '@pmndrs/assets/hdri/lobby.exr.js';
 import { drawMuralCanvas } from './mural.js';
 import { initTransition } from './transition.js';
+import { createEnv2 } from './env2.js';
 
 /* -------------------------------------------------------------------------- */
 /*  Tunables — kept together so lighting/mood can be dialled in quickly.        */
@@ -1276,8 +1277,36 @@ animate();
 window.__scene = { scene, camera, renderer, CFG, muralMat, marbleMat, bloom };
 
 // Premium drag transition between Environment 1 (this 3D scene) and Environment 2.
+// Environment 2 is a REAL Three.js showroom, built on demand and disposed on
+// leave so only the active/approached environment holds GPU memory (Cartier's
+// per-alcove load/dispose model).
 window.__activeEnv = 1;
+let env2Instance = null;
+function ensureEnv2() {
+  if (env2Instance && !env2Instance.disposed) return;
+  const host = document.getElementById('env2');
+  if (!host) return;
+  // Always build on a FRESH canvas: once a WebGL context has been force-lost on a
+  // canvas (our dispose path), that same canvas can't reliably hand out a new
+  // context, so a rebuilt Env2 would fail. A new element sidesteps that entirely.
+  const old = document.getElementById('scene2');
+  if (old) old.remove();
+  const cv = document.createElement('canvas');
+  cv.id = 'scene2';
+  cv.className = 'env2__canvas';
+  host.insertBefore(cv, host.firstChild);
+  env2Instance = createEnv2(cv);
+}
+function disposeEnv2() {
+  if (env2Instance) { env2Instance.dispose(); env2Instance = null; }
+  const cv = document.getElementById('scene2');
+  if (cv) cv.remove();
+}
+window.__env2 = { ensure: ensureEnv2, dispose: disposeEnv2, get instance() { return env2Instance; } };
+
 initTransition({
+  onApproachEnv2: ensureEnv2,   // build Env2 when a drag toward it begins
+  onLeaveEnv2: disposeEnv2,     // free Env2 once parked back on Env1
   onSettled: (env) => {
     // returning to Env1 restores its live pointer interactions automatically
     // (onPointerMove/onClick early-out on __activeEnv === 2)
