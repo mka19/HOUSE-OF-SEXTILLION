@@ -3,6 +3,7 @@
 // everything around it.
 import Lenis from 'lenis';
 import SplitType from 'split-type';
+import './main.js';   // the 3D hero — imported so the whole app is one module/chunk
 
 /* ---------------- smooth scroll (Lenis) ---------------- */
 const lenis = new Lenis({ duration: 1.1, easing: (t) => 1 - Math.pow(1 - t, 3), smoothWheel: true });
@@ -46,7 +47,6 @@ function journey() {
     const rr = el.getBoundingClientRect();
     if (rr.top < vh * 0.85 && rr.bottom > 0) el.classList.add('is-in');
   }
-  window.__revN = splitEls.length;
   requestAnimationFrame(journey);
 }
 requestAnimationFrame(journey);

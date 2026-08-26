@@ -3,15 +3,26 @@ import fs from 'fs';
 const html = fs.readFileSync('dist/index.html', 'utf8');
 const cssFile = fs.readdirSync('dist/assets').find(f => f.endsWith('.css'));
 const jsFile = fs.readdirSync('dist/assets').find(f => f.endsWith('.js'));
-const css = fs.readFileSync(`dist/assets/${cssFile}`, 'utf8');
-const js = fs.readFileSync(`dist/assets/${jsFile}`, 'utf8');
+const css = fs.readFileSync(`dist/assets/${cssFile}`, 'utf8').replace(/<\/style/gi, '<\\/style');
+// Escape any </script> occurrences in the bundle, or they close the inline
+// <script> tag early and truncate everything after them.
+const js = fs.readFileSync(`dist/assets/${jsFile}`, 'utf8').replace(/<\/script/gi, '<\\/script');
 const muralB64 = fs.readFileSync('public/MURAL.jpeg').toString('base64');
 
-// body inner markup (strip the module <script src> tag and any <link>)
-let body = html.split('<body>')[1].split('</body>')[0];
+// body inner markup (the <body> tag now carries data-bg/data-fg attributes, so
+// match it with a regex rather than a literal split). Strip the module <script src>.
+const bodyMatch = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+if (!bodyMatch) throw new Error('could not find <body> in dist/index.html');
+let body = bodyMatch[1];
 body = body.replace(/<script[^>]*src=[^>]*><\/script>/g, '').trim();
 
-const out = `<style>
+// Google Fonts (Duru Sans) is on the artifact CSP allowlist; carry the link so the
+// brand face loads in the published artifact.
+const out = `<title>SEXTILLION</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Duru+Sans&display=swap" rel="stylesheet" />
+<style>
 ${css}
 </style>
 ${body}

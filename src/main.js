@@ -235,10 +235,10 @@ function makeMuralTexture() {
   });
 }
 
+// NO top-level await: a top-level await breaks execution of the rest of the
+// bundle when it's inlined into a single-file artifact. The mural loads async and
+// the panels are built in the .then() below.
 let muralMat;
-const { tex: muralTexture } = await makeMuralTexture();
-muralTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
-muralTexture.colorSpace = THREE.SRGBColorSpace;
 
 /* -------------------------------------------------------------------------- */
 /*  Three suspended flat panels (replaces the curved wall)                      */
@@ -261,27 +261,32 @@ const panelLayout = [
   { i: 1, x: 0, ry: 0 },                    // centre panel, faces camera
   { i: 2, x: P.spread, ry: -P.angle },      // right panel, angled inward
 ];
-for (const L of panelLayout) {
-  const tex = muralTexture.clone(); tex.needsUpdate = true;
-  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
-  tex.repeat.x = 1 / 3; tex.offset.x = L.i / 3;     // this panel's third of the mural
-  const mat = new THREE.MeshStandardMaterial({
-    map: tex, emissive: 0xffefd6, emissiveMap: tex, emissiveIntensity: 0.34,
-    roughness: 0.9, metalness: 0.0, envMapIntensity: 0.35,
-  });
-  if (L.i === 1) muralMat = mat;                     // handle for the tuning harness
-  const g = new THREE.Group();
-  g.position.set(L.x, P.y, P.z); g.rotation.y = L.ry;
-  const frame = new THREE.Mesh(frameGeo, frameMat); frame.position.z = -0.04; g.add(frame);
-  const panel = new THREE.Mesh(panelGeo, mat); panel.receiveShadow = false; g.add(panel);
-  // two thin cables from the top corners up into the black
-  for (const cx of [-P.w * 0.36, P.w * 0.36]) {
-    const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, cableLen, 6), cableMat);
-    cable.position.set(cx, P.h / 2 + cableLen / 2 - 0.1, 0.02);
-    g.add(cable);
+function buildPanels(muralTexture) {
+  muralTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  muralTexture.colorSpace = THREE.SRGBColorSpace;
+  for (const L of panelLayout) {
+    const tex = muralTexture.clone(); tex.needsUpdate = true;
+    tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+    tex.repeat.x = 1 / 3; tex.offset.x = L.i / 3;     // this panel's third of the mural
+    const mat = new THREE.MeshStandardMaterial({
+      map: tex, emissive: 0xffefd6, emissiveMap: tex, emissiveIntensity: 0.34,
+      roughness: 0.9, metalness: 0.0, envMapIntensity: 0.35,
+    });
+    if (L.i === 1) muralMat = mat;                     // handle for the tuning harness
+    const g = new THREE.Group();
+    g.position.set(L.x, P.y, P.z); g.rotation.y = L.ry;
+    const frame = new THREE.Mesh(frameGeo, frameMat); frame.position.z = -0.04; g.add(frame);
+    const panel = new THREE.Mesh(panelGeo, mat); panel.receiveShadow = false; g.add(panel);
+    // two thin cables from the top corners up into the black
+    for (const cx of [-P.w * 0.36, P.w * 0.36]) {
+      const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, cableLen, 6), cableMat);
+      cable.position.set(cx, P.h / 2 + cableLen / 2 - 0.1, 0.02);
+      g.add(cable);
+    }
+    panelGroup.add(g);
   }
-  panelGroup.add(g);
 }
+makeMuralTexture().then(({ tex }) => buildPanels(tex));
 const muralOffsetBaseX = 0;
 
 /* -------------------------------------------------------------------------- */
