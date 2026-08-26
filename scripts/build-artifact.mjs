@@ -16,12 +16,9 @@ if (!bodyMatch) throw new Error('could not find <body> in dist/index.html');
 let body = bodyMatch[1];
 body = body.replace(/<script[^>]*src=[^>]*><\/script>/g, '').trim();
 
-// Google Fonts (Duru Sans) is on the artifact CSP allowlist; carry the link so the
-// brand face loads in the published artifact.
+// Duru Sans is self-hosted via an inlined @font-face in the CSS, so no font <link>
+// is needed — the artifact is fully self-contained.
 const out = `<title>SEXTILLION</title>
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Duru+Sans&display=swap" rel="stylesheet" />
 <style>
 ${css}
 </style>

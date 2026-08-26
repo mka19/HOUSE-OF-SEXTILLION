@@ -88,30 +88,32 @@ function splitReveal() {
   });
 }
 
-/* ---------------- niche grid ---------------- */
-// Placeholder product silhouettes (real cutouts drop into public/products/ later).
-const BAG = `<svg viewBox="0 0 100 120" fill="none"><path d="M24 44c0-14 11-24 26-24s26 10 26 24" stroke="currentColor" stroke-width="3"/><rect x="16" y="42" width="68" height="62" rx="8" fill="currentColor"/><rect x="40" y="42" width="20" height="10" fill="currentColor"/></svg>`;
-const BELT = `<svg viewBox="0 0 100 120" fill="none"><rect x="10" y="52" width="80" height="16" rx="3" fill="currentColor"/><rect x="42" y="46" width="26" height="28" rx="4" stroke="currentColor" stroke-width="4"/></svg>`;
-const SHOE = `<svg viewBox="0 0 100 120" fill="none"><path d="M14 78c6-22 20-30 30-30 4 8 14 12 30 14 12 2 14 10 12 18H14z" fill="currentColor"/></svg>`;
+/* ---------------- niche grid ----------------
+   Products are all "Reveal soon", so the niche is intentionally empty — a single
+   museum-lit alcove with a gold seal on the plinth. Real cutouts drop into
+   public/products/ later (see the img slot). Same staging for every card so the
+   collection reads as one set (DESIGN.md 1c / 1b). */
 const products = [
-  { n: 'BTC Hodl', s: 'Reveal soon', g: BAG },
-  { n: 'BTC Mini', s: 'Reveal soon', g: BAG },
-  { n: 'Crypto Chic Trunk', s: 'New', g: BAG },
-  { n: 'BTC Haaland', s: 'Reveal soon', g: SHOE },
-  { n: 'BTC Bitcream', s: 'Reveal soon', g: BELT },
-  { n: 'BTC Gliders', s: 'New', g: SHOE },
+  { n: 'BTC Hodl', s: 'Reveal soon', cat: 'Bag' },
+  { n: 'BTC Mini', s: 'Reveal soon', cat: 'Bag' },
+  { n: 'Crypto Chic Trunk', s: 'New', cat: 'Trunk' },
+  { n: 'BTC Haaland', s: 'Reveal soon', cat: 'Shoe' },
+  { n: 'BTC Bitcream', s: 'Reveal soon', cat: 'Belt' },
+  { n: 'BTC Gliders', s: 'New', cat: 'Shoe' },
 ];
+const seal = `<svg class="niche__seal" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="22" fill="none" stroke="currentColor" stroke-width="0.6" opacity="0.5"/><text x="24" y="31" text-anchor="middle" font-family="Duru Sans, sans-serif" font-size="20" fill="currentColor">S</text></svg>`;
 const grid = document.getElementById('niche-grid');
 if (grid) {
   grid.innerHTML = products.map((p) => `
     <article class="niche" data-cursor>
       <div class="niche__frame">
-        <div class="niche__prod">${p.g}</div>
+        <div class="niche__glow"></div>
+        ${seal}
         <div class="niche__plinth"></div>
       </div>
       <div class="niche__meta">
         <span class="niche__name">${p.n}</span>
-        <span class="niche__status">${p.s}</span>
+        <span class="niche__status">${p.cat} · ${p.s}</span>
       </div>
     </article>`).join('');
 }
