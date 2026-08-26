@@ -3,7 +3,8 @@
 // everything around it.
 import Lenis from 'lenis';
 import SplitType from 'split-type';
-import './main.js';   // the 3D hero — imported so the whole app is one module/chunk
+// (The Three.js atelier scene in ./main.js is preserved in the repo but not
+//  mounted — the hero is the restrained §6.1 maison per DESIGN.md.)
 
 /* ---------------- smooth scroll (Lenis) ---------------- */
 const lenis = new Lenis({ duration: 1.1, easing: (t) => 1 - Math.pow(1 - t, 3), smoothWheel: true });
@@ -121,13 +122,53 @@ if (grid) {
 /* ---------------- subscribe pills ---------------- */
 document.querySelectorAll('.pill').forEach((p) => p.addEventListener('click', () => p.classList.toggle('is-on')));
 
-/* ---------------- hero visibility gate for the 3D scene ---------------- */
-const stage = document.querySelector('.hero__stage');
-window.__heroVisible = true;
-if (stage) {
-  new IntersectionObserver((e) => { window.__heroVisible = e[0].isIntersecting; }, { threshold: 0.01 })
-    .observe(stage);
+/* ---------------- loader reveal ---------------- */
+function reveal() {
+  const fill = document.getElementById('loader-fill');
+  if (fill) fill.style.width = '100%';
+  setTimeout(() => {
+    document.getElementById('loader')?.classList.add('is-hidden');
+    document.body.classList.add('is-ready');
+  }, 260);
 }
+if (document.readyState === 'complete') reveal();
+else window.addEventListener('load', reveal);
+setTimeout(reveal, 1400);   // safety
+
+/* ---------------- hero wordmark: character shuffle (pattern B) ---------------- */
+function heroShuffle() {
+  const el = document.querySelector('[data-shuffle]');
+  if (!el || el.dataset.done) return; el.dataset.done = '1';
+  const s = new SplitType(el, { types: 'chars' });
+  (s.chars || []).forEach((c, i) => {
+    c.style.display = 'inline-block';
+    c.style.opacity = '0';
+    c.style.transform = 'translateY(40%)';
+    c.style.filter = 'blur(6px)';
+    c.style.transition = 'opacity 0.9s var(--ease), transform 0.9s var(--ease), filter 0.9s var(--ease)';
+    c.style.transitionDelay = (0.25 + i * 0.045) + 's';
+    requestAnimationFrame(() => {
+      c.style.opacity = '1'; c.style.transform = 'none'; c.style.filter = 'none';
+    });
+  });
+}
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(heroShuffle);
+window.addEventListener('load', heroShuffle);
+setTimeout(heroShuffle, 900);
+
+/* ---------------- hero parallax (wordmark up 0.4x, fade) ---------------- */
+const heroCopy = document.querySelector('.hero__copy');
+const heroBloom = document.querySelector('.hero__bloom');
+function heroParallax() {
+  const y = window.scrollY;
+  if (heroCopy && y < window.innerHeight * 2.2) {
+    heroCopy.style.transform = `translateY(${y * 0.4}px)`;
+    heroCopy.style.opacity = String(Math.max(0, 1 - y / (window.innerHeight * 0.75)));
+  }
+  if (heroBloom) heroBloom.style.transform = `translateY(${y * 0.15}px) scale(${1 + y / 4000})`;
+  requestAnimationFrame(heroParallax);
+}
+requestAnimationFrame(heroParallax);
 
 /* Split after fonts settle so line breaks measure correctly — but never hang on
    it: a 1.2s fallback (and window load) guarantee the reveal always runs even if

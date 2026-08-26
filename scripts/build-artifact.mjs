@@ -7,7 +7,6 @@ const css = fs.readFileSync(`dist/assets/${cssFile}`, 'utf8').replace(/<\/style/
 // Escape any </script> occurrences in the bundle, or they close the inline
 // <script> tag early and truncate everything after them.
 const js = fs.readFileSync(`dist/assets/${jsFile}`, 'utf8').replace(/<\/script/gi, '<\\/script');
-const muralB64 = fs.readFileSync('public/MURAL.jpeg').toString('base64');
 
 // body inner markup (the <body> tag now carries data-bg/data-fg attributes, so
 // match it with a regex rather than a literal split). Strip the module <script src>.
@@ -23,7 +22,6 @@ const out = `<title>SEXTILLION</title>
 ${css}
 </style>
 ${body}
-<script>window.__MURAL_DATA_URI="data:image/jpeg;base64,${muralB64}";</script>
 <script type="module">
 ${js}
 </script>
