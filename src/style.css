@@ -82,7 +82,7 @@ img, canvas { display: block; max-width: 100%; }
 /* ---------- custom cursor ---------- */
 .cursor {
   position: fixed; top: 0; left: 0; z-index: 90;
-  width: 28px; height: 28px; margin: -14px 0 0 -14px;
+  width: 16px; height: 16px; margin: -8px 0 0 -8px;
   border: 1px solid var(--sx-gold); border-radius: 50%;
   pointer-events: none; mix-blend-mode: difference;
   display: grid; place-items: center;
@@ -90,8 +90,8 @@ img, canvas { display: block; max-width: 100%; }
   will-change: transform;
 }
 .cursor.is-active {
-  width: 78px; height: 78px; margin: -39px 0 0 -39px;
-  background: rgba(186, 158, 120, 0.2);
+  width: 64px; height: 64px; margin: -32px 0 0 -32px;
+  background: rgba(186, 158, 120, 0.18);
 }
 .cursor__label { font-size: 9px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--sx-cream); opacity: 0; transition: opacity 0.2s var(--ease); }
 .cursor.is-active .cursor__label { opacity: 1; }
@@ -131,13 +131,12 @@ img, canvas { display: block; max-width: 100%; }
 }
 /* a slow radial gold bloom breathing in from bottom-centre */
 .hero__bloom {
-  position: absolute; inset: 0; pointer-events: none; z-index: 1; will-change: transform, opacity;
+  position: absolute; inset: -8%; pointer-events: none; z-index: 1; will-change: transform, opacity;
   background: radial-gradient(72% 58% at 50% 104%, var(--sx-gold) 0%, var(--sx-bronze) 20%, rgba(47,38,24,0) 60%);
   opacity: 0; transform-origin: 50% 100%;
-  animation: heroBloomIn 4s var(--ease) 0.3s forwards, heroDrift 22s ease-in-out 4.3s infinite;
+  animation: heroBloomIn 4s var(--ease) 0.3s forwards;   /* transform is driven by JS (breathing + pointer) */
 }
 @keyframes heroBloomIn { to { opacity: 0.85; } }
-@keyframes heroDrift { 0%,100% { transform: scale(1); } 50% { transform: scale(1.14) translateY(-2%); } }
 .hero__copy {
   position: relative; z-index: 2; text-align: center; padding: 0 var(--gutter);
   display: flex; flex-direction: column; align-items: center; gap: var(--sx-4);
@@ -279,9 +278,13 @@ img, canvas { display: block; max-width: 100%; }
 /* ---------- reveal (line mask) ----------
    The hidden state is gated on the JS-added .split class, so headings stay
    visible if the reveal script (or fonts) never loads. */
-.split .line { overflow: hidden; display: block; }
-.split .line > span { display: block; transform: translateY(110%); transition: transform 1.1s var(--ease); }
-.split.is-in .line > span { transform: translateY(0); }
+/* Sui — per-character settle-in on every heading (§5b) */
+.split .char {
+  display: inline-block;
+  opacity: 0; transform: translateY(45%); filter: blur(8px);
+  transition: opacity 1.1s var(--ease), transform 1.1s var(--ease), filter 1.1s var(--ease);
+}
+.split.is-in .char { opacity: 1; transform: none; filter: none; }
 /* plain fade-up reveal for non-split blocks (beats, images, cards) */
 .reveal:not([data-split]) { opacity: 0; transform: translateY(20px); transition: opacity 0.9s var(--ease), transform 0.9s var(--ease); }
 .reveal:not([data-split]).is-in { opacity: 1; transform: none; }

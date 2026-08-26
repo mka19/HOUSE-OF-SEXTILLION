@@ -58,23 +58,34 @@ function journey() {
 }
 requestAnimationFrame(journey);
 
-/* ---------------- custom cursor ---------------- */
+/* ---------------- custom cursor (PixelVault: lerp trail + magnetic hover) ------ */
 const cursor = document.getElementById('cursor');
 const label = cursor.querySelector('.cursor__label');
-let cx = window.innerWidth / 2, cy = window.innerHeight / 2, tx = cx, ty = cy;
-window.addEventListener('pointermove', (e) => { tx = e.clientX; ty = e.clientY; }, { passive: true });
+let cx = window.innerWidth / 2, cy = window.innerHeight / 2;   // pointer (raw)
+let ptrX = cx, ptrY = cy;                                      // for hero parallax etc.
+let curX = cx, curY = cy;                                      // rendered cursor pos
+let magnet = null;                                             // element the cursor is magnetised to
+window.addEventListener('pointermove', (e) => { cx = ptrX = e.clientX; cy = ptrY = e.clientY; }, { passive: true });
 function cursorRaf() {
-  cx += (tx - cx) * 0.18; cy += (ty - cy) * 0.18;
-  cursor.style.transform = `translate(${cx}px, ${cy}px)`;
+  let tx = cx, ty = cy;
+  if (magnet) {
+    const r = magnet.getBoundingClientRect();
+    // pull the cursor a third of the way toward the target's centre (magnetism)
+    tx = cx + (r.left + r.width / 2 - cx) * 0.34;
+    ty = cy + (r.top + r.height / 2 - cy) * 0.34;
+  }
+  curX += (tx - curX) * 0.2; curY += (ty - curY) * 0.2;
+  cursor.style.transform = `translate(${curX}px, ${curY}px)`;
   requestAnimationFrame(cursorRaf);
 }
 requestAnimationFrame(cursorRaf);
 document.querySelectorAll('a, button, [data-cursor], .niche').forEach((el) => {
   el.addEventListener('pointerenter', () => {
     cursor.classList.add('is-active');
+    if (el.matches('.btn, .nav__link, .pill, .niche')) magnet = el;   // magnetise to buttons/links/cards
     label.textContent = el.classList.contains('niche') ? 'Soon' : (el.dataset.cursorLabel || '');
   });
-  el.addEventListener('pointerleave', () => { cursor.classList.remove('is-active'); label.textContent = ''; });
+  el.addEventListener('pointerleave', () => { cursor.classList.remove('is-active'); if (magnet === el) magnet = null; label.textContent = ''; });
 });
 
 /* ---------------- heading reveal (line mask) ----------------
@@ -84,12 +95,9 @@ let splitDone = false;
 function splitReveal() {
   if (splitDone) return; splitDone = true;
   document.querySelectorAll('[data-split]').forEach((el) => {
-    const s = new SplitType(el, { types: 'lines' });
-    (s.lines || []).forEach((ln) => {
-      const span = document.createElement('span');
-      while (ln.firstChild) span.appendChild(ln.firstChild);
-      ln.appendChild(span);
-    });
+    const s = new SplitType(el, { types: 'lines, words, chars' });
+    // Sui: each character settles in, staggered ~0.028s, on scroll-in
+    (s.chars || []).forEach((c, i) => { c.style.transitionDelay = (i * 0.028) + 's'; });
     el.classList.add('split');                 // gate the hidden state on JS having run
     splitEls.push(el);
   });
@@ -174,16 +182,31 @@ if (document.fonts && document.fonts.ready) document.fonts.ready.then(heroShuffl
 window.addEventListener('load', heroShuffle);
 setTimeout(heroShuffle, 900);
 
-/* ---------------- hero parallax (wordmark up 0.4x, fade) ---------------- */
+/* ---------------- hero: scroll parallax + PixelVault pointer immersion -------- */
+// The wordmark, sub and bloom react to the pointer at DIFFERENT rates (depth
+// without scroll), and the copy parallaxes up + fades on scroll.
 const heroCopy = document.querySelector('.hero__copy');
 const heroBloom = document.querySelector('.hero__bloom');
+const heroWord = document.querySelector('.hero__word');
+const heroSub = document.querySelector('.hero__sub');
+let mnx = 0, mny = 0;   // smoothed pointer, -1..1 from centre
+const t0 = performance.now();
 function heroParallax() {
+  const nx = (ptrX / window.innerWidth - 0.5) * 2;
+  const ny = (ptrY / window.innerHeight - 0.5) * 2;
+  mnx += (nx - mnx) * 0.06; mny += (ny - mny) * 0.06;   // slow, barely-perceptible (Cartier easing)
   const y = window.scrollY;
+  const t = (performance.now() - t0) / 1000;
+  if (heroBloom) {
+    const breathe = 1 + 0.06 * Math.sin(t * 0.32);
+    heroBloom.style.transform = `translate(${mnx * 26}px, ${mny * 14 + y * 0.12}px) scale(${breathe + y / 5000})`;
+  }
+  if (heroWord) heroWord.style.transform = `translate(${mnx * 14}px, ${mny * 8}px)`;
+  if (heroSub) heroSub.style.transform = `translate(${mnx * 22}px, ${mny * 12}px)`;
   if (heroCopy && y < window.innerHeight * 2.2) {
     heroCopy.style.transform = `translateY(${y * 0.4}px)`;
     heroCopy.style.opacity = String(Math.max(0, 1 - y / (window.innerHeight * 0.75)));
   }
-  if (heroBloom) heroBloom.style.transform = `translateY(${y * 0.15}px) scale(${1 + y / 4000})`;
   requestAnimationFrame(heroParallax);
 }
 requestAnimationFrame(heroParallax);
