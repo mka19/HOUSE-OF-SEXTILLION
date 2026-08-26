@@ -3,72 +3,108 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>House of Sextillion — Maison</title>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230d0a06'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='20' fill='%23c8a24c' text-anchor='middle'%3ES%3C/text%3E%3C/svg%3E" />
-    <meta name="description" content="House of Sextillion — a luxury maison of bags, belts and shoes." />
+    <title>SEXTILLION — Where luxury meets Bitcoin</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='0' fill='%230A0806'/%3E%3Ctext x='16' y='23' font-family='Duru Sans,sans-serif' font-size='19' fill='%23BA9E78' text-anchor='middle'%3ES%3C/text%3E%3C/svg%3E" />
+    <meta name="description" content="SEXTILLION — luxury bags, belts and shoes with Bitcoin point yield and digital provenance." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Duru+Sans&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="./src/style.css" />
   </head>
-  <body>
-    <!-- Loading veil -->
+  <body data-bg="#0A0806" data-fg="#F6F3EE">
+    <!-- custom cursor -->
+    <div id="cursor" class="cursor" aria-hidden="true"><span class="cursor__label"></span></div>
+
+    <!-- loading veil -->
     <div id="loader" class="loader" aria-hidden="true">
-      <div class="loader__mark">HOUSE OF SEXTILLION</div>
+      <div class="loader__mark">SEXTILLION</div>
       <div class="loader__bar"><span id="loader-fill" class="loader__fill"></span></div>
     </div>
 
-    <!-- Continuous exhibition: two environments on one horizontal track -->
-    <div id="showroom">
-      <!-- Environment 1 — the live 3D golden panorama -->
-      <section class="env" id="env1" aria-label="Environment one — The Golden Panorama">
-        <canvas id="scene"></canvas>
-        <div class="grade" aria-hidden="true"></div>
-        <footer class="chrome chrome--bottom">
-          <div class="chrome__eyebrow">The Golden Panorama</div>
-          <h1 class="chrome__title">A room made of light</h1>
-          <p class="chrome__lede">Real-time atelier · drag left to enter the showroom</p>
-        </footer>
-      </section>
-
-      <!-- Environment 2 — the atelier showroom (live 3D, built on demand: the
-           #scene2 canvas is created by main.js when a drag toward Env2 begins,
-           and removed again when Env2 is disposed on return to Env1). -->
-      <section class="env" id="env2" aria-label="Environment two — The Atelier Showroom">
-        <div class="grade" aria-hidden="true"></div>
-        <footer class="chrome chrome--bottom">
-          <div class="chrome__eyebrow">The Atelier</div>
-          <h1 class="chrome__title">The Collection</h1>
-          <p class="chrome__lede">Bags · Belts · Shoes — drag right to return</p>
-        </footer>
-      </section>
-
-      <!-- dark connecting "void" you pass through between the two rooms -->
-      <div id="voidoverlay" aria-hidden="true"></div>
-      <!-- warm light-continuity overlay travelling with the boundary -->
-      <div id="lightseam" aria-hidden="true"></div>
-    </div>
-
-    <!-- Directional (horizontal-only) motion-blur filter, driven by drag velocity.
-         stdDeviation="x 0" blurs on X only, so fast movement smears sideways like
-         a cinematic pan — not the isotropic softness of CSS blur(). -->
-    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
-      <filter id="mblur" x="-10%" y="-10%" width="120%" height="120%">
-        <feGaussianBlur id="mblur-g" in="SourceGraphic" stdDeviation="0 0" />
-      </filter>
-    </svg>
-
-    <!-- Persistent brand chrome (above both environments) -->
-    <header class="chrome chrome--top">
-      <div class="chrome__brand">HOUSE OF SEXTILLION</div>
-      <nav class="chrome__nav">
-        <a href="#" class="nav-link" data-product="Bags">Bags</a>
-        <a href="#" class="nav-link is-active" data-product="Belts">Belts</a>
-        <a href="#" class="nav-link" data-product="Shoes">Shoes</a>
-        <a href="#" class="nav-link nav-link--muted">Maison</a>
+    <!-- primary nav — mix-blend difference so it inverts over the colour journey -->
+    <header class="nav">
+      <a href="#top" class="nav__mark" data-cursor>SEXTILLION</a>
+      <nav class="nav__links">
+        <a href="#collection" class="nav__link" data-cursor>New In</a>
+        <a href="#model" class="nav__link" data-cursor>Our Story</a>
+        <a href="#collection" class="nav__link" data-cursor>Collection</a>
+        <a href="#" class="nav__link" data-cursor>View Bag</a>
       </nav>
     </header>
 
-    <div id="tooltip" class="tooltip" aria-hidden="true"></div>
+    <main id="top">
+      <!-- HERO — the live 3D panel gallery -->
+      <section class="hero" data-bg="#0A0806" data-fg="#F6F3EE" aria-label="Hero">
+        <div class="hero__stage">
+          <canvas id="scene"></canvas>
+          <div class="grade" aria-hidden="true"></div>
+          <div class="hero__copy">
+            <span class="eyebrow eyebrow--light">Where luxury meets Bitcoin</span>
+            <h1 class="hero__word d1" data-split>SEXTILLION</h1>
+            <p class="hero__sub">A new asset.<br />A new luxury.<br />A new era.</p>
+          </div>
+          <div class="hero__foot">
+            <span class="mono">Scroll</span>
+            <span class="mono">210 / 210 · Founder Slots</span>
+          </div>
+        </div>
+      </section>
 
+      <!-- STATEMENT / THE MODEL -->
+      <section class="statement" id="model" data-bg="#2F2618" data-fg="#F6F3EE" aria-label="The Model">
+        <span class="eyebrow"><span class="eyebrow__rule"></span>The Model</span>
+        <h2 class="d1 reveal" data-split>Luxury gives you status.<br />Ownership gives you possibilities.</h2>
+        <div class="tiers mono">
+          <div class="tiers__row tiers__row--head"><span>Tier</span><span>Classification</span><span>Benefit</span></div>
+          <div class="tiers__row"><span>Sextillion</span><span>Ultra-Rare</span><span>Highest</span></div>
+          <div class="tiers__row"><span>Quintillion</span><span>Very Rare</span><span>Elevated</span></div>
+          <div class="tiers__row"><span>Trillion</span><span>Rare</span><span>Enhanced</span></div>
+          <div class="tiers__row"><span>Billion</span><span>Limited</span><span>Standard</span></div>
+          <div class="tiers__row"><span>Million</span><span>Open Edition</span><span>Entry</span></div>
+        </div>
+      </section>
+
+      <!-- COLLECTION — the niche grid -->
+      <section class="collection" id="collection" data-bg="#F6F3EE" data-fg="#2F2618" aria-label="Collection">
+        <header class="collection__head">
+          <span class="eyebrow"><span class="eyebrow__rule"></span>New Arrivals</span>
+          <h2 class="d2 reveal" data-split>Newest additions to the collection</h2>
+        </header>
+        <div class="grid" id="niche-grid"><!-- niches injected by site.js --></div>
+      </section>
+
+      <!-- NEWSLETTER — the one saturated section -->
+      <section class="subscribe" id="subscribe" data-bg="#BA9E78" data-fg="#2F2618" aria-label="Subscribe">
+        <h2 class="d1 reveal" data-split>Your style journey<br />starts right now.</h2>
+        <form class="sub-form" onsubmit="return false">
+          <label class="field"><span class="mono">Name</span><input type="text" name="name" autocomplete="name" /></label>
+          <label class="field"><span class="mono">Email</span><input type="email" name="email" autocomplete="email" /></label>
+          <div class="pills mono">
+            <button type="button" class="pill" data-cursor>Bags</button>
+            <button type="button" class="pill" data-cursor>Belts</button>
+            <button type="button" class="pill" data-cursor>Shoes</button>
+          </div>
+          <button type="submit" class="btn" data-cursor>Subscribe →</button>
+        </form>
+      </section>
+
+      <!-- FOOTER -->
+      <footer class="footer" data-bg="#0A0806" data-fg="#F6F3EE">
+        <div class="footer__top">
+          <span class="footer__mark">SEXTILLION</span>
+          <a href="#collection" class="btn btn--ghost" data-cursor>Shop Now</a>
+        </div>
+        <div class="footer__cols mono">
+          <div><span class="footer__h">Explore</span><a href="#model">Our Story</a><a href="#">FAQ</a><a href="#">Contact</a></div>
+          <div><span class="footer__h">Connect</span><a href="#">Instagram</a><a href="#">X</a><a href="#">WhatsApp</a></div>
+          <div><span class="footer__h">Legal</span><a href="#">Terms</a><a href="#">Privacy</a><a href="#">Shipping</a></div>
+        </div>
+        <div class="footer__giant" aria-hidden="true">SEXTILLION</div>
+        <div class="footer__legal mono">© 2024 SEXTILLION. All rights reserved.</div>
+      </footer>
+    </main>
+
+    <script type="module" src="./src/site.js"></script>
     <script type="module" src="./src/main.js"></script>
   </body>
 </html>

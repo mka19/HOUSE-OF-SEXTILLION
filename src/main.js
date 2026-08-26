@@ -9,8 +9,6 @@ import { GammaCorrectionShader } from 'three/examples/jsm/shaders/GammaCorrectio
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import hdriUrl from '@pmndrs/assets/hdri/lobby.exr.js';
 import { drawMuralCanvas } from './mural.js';
-import { initTransition } from './transition.js';
-import { createEnv2 } from './env2.js';
 
 /* -------------------------------------------------------------------------- */
 /*  Tunables — kept together so lighting/mood can be dialled in quickly.        */
@@ -993,7 +991,7 @@ wallPlane.position.set(0, CFG.panel.y, CFG.panel.z - 0.2);
 scene.add(wallPlane);
 
 function onPointerMove(e) {
-  if (window.__envDragging || window.__activeEnv === 2) return; // suspended while moving between / inside Env2
+  if (window.__heroVisible === false) return;  // 3D hero off-screen — skip raycasts
   pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
   pointer.y = -((e.clientY / window.innerHeight) * 2 - 1);
   lastInteract = performance.now();
@@ -1022,7 +1020,7 @@ function findGroup(obj) {
   return interactive.find((g) => g.userData.obj === obj) || null;
 }
 function onClick() {
-  if (window.__envDragging || window.__activeEnv === 2) return;
+  if (window.__heroVisible === false) return;
   if (hovered) hovered.userData.click = 1.0;
 }
 window.addEventListener('pointermove', onPointerMove);
@@ -1114,9 +1112,9 @@ function damp(current, target, lambda, dt) {
 
 function animate() {
   requestAnimationFrame(animate);
-  // parked on Environment 2 (and not dragging back) — the 3D scene is off-screen,
-  // so skip rendering it entirely for performance. Resumes on drag-back.
-  if (window.__activeEnv === 2 && !window.__envDragging) return;
+  // the 3D room is the pinned HERO; once the hero scrolls off-screen we stop
+  // rendering it entirely (site.js sets __heroVisible via an IntersectionObserver).
+  if (window.__heroVisible === false) return;
   const dt = Math.min(clock.getDelta(), 0.05);
   const t = clock.elapsedTime;
 
@@ -1264,40 +1262,8 @@ animate();
 // Expose a couple of handles for the screenshot/tuning harness.
 window.__scene = { scene, camera, renderer, CFG, muralMat, marbleMat, bloom };
 
-// Premium drag transition between Environment 1 (this 3D scene) and Environment 2.
-// Environment 2 is a REAL Three.js showroom, built on demand and disposed on
-// leave so only the active/approached environment holds GPU memory (Cartier's
-// per-alcove load/dispose model).
+// The 3D room is the site's pinned hero (see index.html / site.js). The old
+// horizontal Env1<->Env2 drag transition is retired in the scroll-site build;
+// the showroom concept is now expressed by the CSS niche grid (§1c / §6.3).
 window.__activeEnv = 1;
-let env2Instance = null;
-function ensureEnv2() {
-  if (env2Instance && !env2Instance.disposed) return;
-  const host = document.getElementById('env2');
-  if (!host) return;
-  // Always build on a FRESH canvas: once a WebGL context has been force-lost on a
-  // canvas (our dispose path), that same canvas can't reliably hand out a new
-  // context, so a rebuilt Env2 would fail. A new element sidesteps that entirely.
-  const old = document.getElementById('scene2');
-  if (old) old.remove();
-  const cv = document.createElement('canvas');
-  cv.id = 'scene2';
-  cv.className = 'env2__canvas';
-  host.insertBefore(cv, host.firstChild);
-  env2Instance = createEnv2(cv);
-}
-function disposeEnv2() {
-  if (env2Instance) { env2Instance.dispose(); env2Instance = null; }
-  const cv = document.getElementById('scene2');
-  if (cv) cv.remove();
-}
-window.__env2 = { ensure: ensureEnv2, dispose: disposeEnv2, get instance() { return env2Instance; } };
-
-initTransition({
-  onApproachEnv2: ensureEnv2,   // build Env2 when a drag toward it begins
-  onLeaveEnv2: disposeEnv2,     // free Env2 once parked back on Env1
-  onSettled: (env) => {
-    // returning to Env1 restores its live pointer interactions automatically
-    // (onPointerMove/onClick early-out on __activeEnv === 2)
-    document.querySelector('.chrome--top')?.classList.toggle('on-env2', env === 2);
-  },
-});
+if (window.__heroVisible === undefined) window.__heroVisible = true;
