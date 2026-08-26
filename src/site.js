@@ -141,14 +141,23 @@ if (grid) {
 /* ---------------- swap in real images when their files exist ---------------- */
 // Elements marked data-img show a styled placeholder until public/<name>.<ext>
 // is present, then paint it as a background and add .has-img (hiding the label).
-document.querySelectorAll('[data-img]').forEach((el) => {
-  const name = el.dataset.img;
-  ['png', 'jpg', 'jpeg', 'webp'].forEach((ext) => {
-    const img = new Image();
-    img.onload = () => { if (!el.classList.contains('has-img')) { el.style.backgroundImage = `url("${img.src}")`; el.classList.add('has-img'); } };
-    img.src = `./${name}.${ext}`;
+// single-file artifact inlines images into window.__IMG; the served build loads
+// from public/. applyImages() runs a few times so it can't lose a timing race.
+function applyImages() {
+  document.querySelectorAll('[data-img]:not(.has-img)').forEach((el) => {
+    const name = el.dataset.img;
+    const inlined = (window.__IMG || {})[name];
+    if (inlined) { el.style.backgroundImage = `url("${inlined}")`; el.classList.add('has-img'); return; }
+    ['png', 'jpg', 'jpeg', 'webp'].forEach((ext) => {
+      const img = new Image();
+      img.onload = () => { if (!el.classList.contains('has-img')) { el.style.backgroundImage = `url("${img.src}")`; el.classList.add('has-img'); } };
+      img.src = `./${name}.${ext}`;
+    });
   });
-});
+}
+applyImages();
+requestAnimationFrame(applyImages);
+window.addEventListener('load', applyImages);
 
 /* ---------------- subscribe pills ---------------- */
 document.querySelectorAll('.pill').forEach((p) => p.addEventListener('click', () => p.classList.toggle('is-on')));

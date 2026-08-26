@@ -157,8 +157,8 @@ img, canvas { display: block; max-width: 100%; }
 .hero__scroll::after { content: ""; display: inline-block; width: 1px; height: 26px; background: var(--sx-gold); margin-left: 12px; vertical-align: middle; opacity: 0.6; }
 
 /* ---------- generic section frame (colour journey) ---------- */
-.statement, .collection, .token, .apes, .subscribe, .footer { position: relative; padding: var(--sx-24) var(--gutter); }
-@media (max-width: 720px) { .statement, .collection, .token, .apes, .subscribe, .footer { padding: var(--sx-12) var(--gutter); } }
+.statement, .collection, .lookbook, .token, .apes, .subscribe, .footer { position: relative; padding: var(--sx-24) var(--gutter); }
+@media (max-width: 720px) { .statement, .collection, .lookbook, .token, .apes, .subscribe, .footer { padding: var(--sx-12) var(--gutter); } }
 
 /* STATEMENT */
 .statement .d1 { font-size: var(--t-d1); text-transform: uppercase; letter-spacing: 0.02em; line-height: 0.94; margin-top: var(--sx-4); max-width: 20ch; }
@@ -174,9 +174,20 @@ img, canvas { display: block; max-width: 100%; }
 .tiers__row { display: grid; grid-template-columns: 1.2fr 1fr 0.8fr; gap: var(--sx-4); padding: var(--sx-3) 0; border-bottom: 1px solid var(--line); letter-spacing: 0.18em; }
 .tiers__row--head { color: var(--sx-gold); background: rgba(186,158,120,0.1); }
 
-/* COLLECTION niche grid */
+/* COLLECTION — full-bleed showroom + a quiet product index */
 .collection__head { display: flex; flex-direction: column; gap: var(--sx-4); margin-bottom: var(--sx-12); }
 .collection .d2 { font-size: var(--t-d2); text-transform: uppercase; letter-spacing: 0.04em; max-width: 18ch; }
+.coll__hero {
+  width: calc(100% + 2 * var(--gutter)); margin-left: calc(-1 * var(--gutter));
+  aspect-ratio: 21/9; background: var(--sx-stone) center/cover no-repeat;
+  background-size: cover;
+}
+@media (max-width: 720px) { .coll__hero { aspect-ratio: 4/5; } }
+.coll__names { list-style: none; margin-top: var(--sx-8); display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sx-4) var(--sx-8); }
+@media (max-width: 720px) { .coll__names { grid-template-columns: 1fr; } }
+.coll__names li { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sx-3); border-top: 1px solid var(--line); padding-top: var(--sx-2); }
+.coll__nm { font-size: var(--t-d3); text-transform: uppercase; letter-spacing: 0.09em; }
+.coll__st { color: rgba(47,38,24,0.5); white-space: nowrap; }
 .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sx-6); }
 @media (max-width: 900px) { .grid { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
@@ -207,6 +218,24 @@ img, canvas { display: block; max-width: 100%; }
 .niche__meta { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sx-3); padding-top: 2px; }
 .niche__name { font-size: var(--t-d3); text-transform: uppercase; letter-spacing: 0.09em; }
 .niche__status { font-size: var(--t-lb); letter-spacing: 0.22em; text-transform: uppercase; color: var(--sx-text-muted, rgba(47,38,24,0.5)); white-space: nowrap; }
+
+/* LOOKBOOK (§6.4) — alternating full editorial + spec panel */
+.lookbook { display: flex; flex-direction: column; gap: var(--sx-16); }
+.look { display: flex; gap: var(--sx-8); align-items: center; }
+.look--flip { flex-direction: row-reverse; }
+@media (max-width: 820px) { .look, .look--flip { flex-direction: column; align-items: stretch; } }
+.look__img {
+  flex: 1.5; aspect-ratio: 4/5; overflow: hidden;
+  background: radial-gradient(120% 90% at 50% 25%, rgba(186,158,120,0.22), rgba(0,0,0,0) 60%),
+              linear-gradient(180deg, var(--sx-sand), var(--sx-stone));
+  background-size: cover; background-position: center;
+}
+.look__img.has-img { background-blend-mode: normal; }
+.look__spec { flex: 1; display: flex; flex-direction: column; gap: var(--sx-3); }
+.look__idx { color: var(--sx-gold); }
+.look__name { font-size: var(--t-d2); text-transform: uppercase; letter-spacing: 0.04em; line-height: 1.0; }
+.look__lede { font-size: var(--t-body); color: rgba(47,38,24,0.6); }
+.look__facts { display: flex; flex-direction: column; gap: 0.7rem; border-top: 1px solid var(--line); padding-top: var(--sx-4); margin-top: var(--sx-2); color: rgba(47,38,24,0.72); letter-spacing: 0.14em; }
 
 /* TOKEN2049 (§6.6) — large visual left, sticky card right */
 .token { display: grid; grid-template-columns: 1.6fr 1fr; grid-template-areas: "map card" "strip strip"; gap: var(--sx-8) var(--sx-12); align-items: start; }
