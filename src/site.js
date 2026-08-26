@@ -27,6 +27,7 @@ function hex(c) { const n = parseInt(c.slice(1), 16); return [n >> 16 & 255, n >
 function mix(a, b, t) { return a.map((v, i) => Math.round(v + (b[i] - v) * t)); }
 const cols = sections.map((s) => ({ el: s, bg: hex(s.dataset.bg), fg: hex(s.dataset.fg) }));
 const splitEls = [];   // populated by splitReveal(); revealed by journey()
+const revealEls = [...document.querySelectorAll('.reveal:not([data-split])')]; // plain fade-ups
 function journey() {
   const mid = window.scrollY + window.innerHeight / 2;
   let cur = cols[0];
@@ -44,6 +45,11 @@ function journey() {
   // heading reveals ride this same (known-running) loop
   const vh = window.innerHeight;
   for (const el of splitEls) {
+    if (el.classList.contains('is-in')) continue;
+    const rr = el.getBoundingClientRect();
+    if (rr.top < vh * 0.85 && rr.bottom > 0) el.classList.add('is-in');
+  }
+  for (const el of revealEls) {
     if (el.classList.contains('is-in')) continue;
     const rr = el.getBoundingClientRect();
     if (rr.top < vh * 0.85 && rr.bottom > 0) el.classList.add('is-in');
@@ -118,6 +124,18 @@ if (grid) {
       </div>
     </article>`).join('');
 }
+
+/* ---------------- swap in real images when their files exist ---------------- */
+// Elements marked data-img show a styled placeholder until public/<name>.<ext>
+// is present, then paint it as a background and add .has-img (hiding the label).
+document.querySelectorAll('[data-img]').forEach((el) => {
+  const name = el.dataset.img;
+  ['png', 'jpg', 'jpeg', 'webp'].forEach((ext) => {
+    const img = new Image();
+    img.onload = () => { if (!el.classList.contains('has-img')) { el.style.backgroundImage = `url("${img.src}")`; el.classList.add('has-img'); } };
+    img.src = `./${name}.${ext}`;
+  });
+});
 
 /* ---------------- subscribe pills ---------------- */
 document.querySelectorAll('.pill').forEach((p) => p.addEventListener('click', () => p.classList.toggle('is-on')));
