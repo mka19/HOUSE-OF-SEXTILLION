@@ -95,9 +95,14 @@ let splitDone = false;
 function splitReveal() {
   if (splitDone) return; splitDone = true;
   document.querySelectorAll('[data-split]').forEach((el) => {
-    const s = new SplitType(el, { types: 'lines, words, chars' });
-    // Sui: each character settles in, staggered ~0.028s, on scroll-in
-    (s.chars || []).forEach((c, i) => { c.style.transitionDelay = (i * 0.028) + 's'; });
+    const s = new SplitType(el, { types: 'lines' });
+    // Sui line-mask: wrap each line's content so it can clip up, staggered 0.08s/line
+    (s.lines || []).forEach((ln, i) => {
+      const span = document.createElement('span');
+      while (ln.firstChild) span.appendChild(ln.firstChild);
+      span.style.transitionDelay = (i * 0.08) + 's';
+      ln.appendChild(span);
+    });
     el.classList.add('split');                 // gate the hidden state on JS having run
     splitEls.push(el);
   });

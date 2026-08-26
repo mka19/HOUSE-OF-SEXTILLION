@@ -278,13 +278,15 @@ img, canvas { display: block; max-width: 100%; }
 /* ---------- reveal (line mask) ----------
    The hidden state is gated on the JS-added .split class, so headings stay
    visible if the reveal script (or fonts) never loads. */
-/* Sui — per-character settle-in on every heading (§5b) */
-.split .char {
-  display: inline-block;
-  opacity: 0; transform: translateY(45%); filter: blur(8px);
-  transition: opacity 1.1s var(--ease), transform 1.1s var(--ease), filter 1.1s var(--ease);
+/* Sui — masked LINE reveal on every headline (§1 / §5-A): each line clips up
+   from below, staggered per line. (Character shuffle is reserved for the hero
+   wordmark only, per §5-B "twice maximum".) */
+.split .line { overflow: hidden; display: block; }
+.split .line > span {
+  display: block; transform: translateY(110%);
+  transition: transform 1.1s var(--ease);
 }
-.split.is-in .char { opacity: 1; transform: none; filter: none; }
+.split.is-in .line > span { transform: translateY(0); }
 /* plain fade-up reveal for non-split blocks (beats, images, cards) */
 .reveal:not([data-split]) { opacity: 0; transform: translateY(20px); transition: opacity 0.9s var(--ease), transform 0.9s var(--ease); }
 .reveal:not([data-split]).is-in { opacity: 1; transform: none; }
