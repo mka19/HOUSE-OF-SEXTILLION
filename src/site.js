@@ -202,6 +202,29 @@ subForm && subForm.addEventListener('submit', (e) => {
   subMsg.className = 'sub-msg mono is-ok';
 });
 
+/* ---------------- by-the-numbers count-up ---------------- */
+const figs = document.querySelectorAll('.figure__n');
+if (figs.length && 'IntersectionObserver' in window) {
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach((en) => {
+      if (!en.isIntersecting) return;
+      const el = en.target;
+      io.unobserve(el);
+      const target = parseInt(el.dataset.count || '0', 10);
+      const suffix = el.dataset.suffix || '';
+      const dur = 1600, t0 = performance.now();
+      const tick = (now) => {
+        const p = Math.min(1, (now - t0) / dur);
+        const eased = 1 - Math.pow(1 - p, 3);
+        el.textContent = Math.round(target * eased) + suffix;
+        if (p < 1) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+  }, { threshold: 0.4 });
+  figs.forEach((f) => io.observe(f));
+}
+
 /* ---------------- loader reveal ---------------- */
 function reveal() {
   const fill = document.getElementById('loader-fill');
