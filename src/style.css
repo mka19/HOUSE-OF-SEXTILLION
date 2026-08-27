@@ -324,3 +324,79 @@ img, canvas { display: block; max-width: 100%; }
   .split .line > span { transition: opacity 0.3s; transform: none; }
   .cursor { display: none; } body { cursor: auto; }
 }
+
+/* ---------- nav bag button ---------- */
+.nav__bag { font-family: var(--f); background: none; border: 1px solid currentColor; padding: 0.5rem 1rem; cursor: none; opacity: 0.82; }
+.nav__bag::after { display: none; }
+.nav__bag:hover { opacity: 1; }
+
+/* ---------- mobile burger (hidden on desktop) ---------- */
+.nav__burger {
+  display: none; width: 30px; height: 22px; background: none; border: none; padding: 0;
+  position: relative; cursor: none; color: inherit;
+}
+.nav__burger span {
+  position: absolute; left: 0; width: 100%; height: 1.5px; background: currentColor;
+  transition: transform 0.4s var(--ease), opacity 0.3s var(--ease);
+}
+.nav__burger span:nth-child(1) { top: 4px; }
+.nav__burger span:nth-child(2) { bottom: 4px; }
+.nav__burger.is-open span:nth-child(1) { top: 10px; transform: rotate(45deg); }
+.nav__burger.is-open span:nth-child(2) { bottom: 10px; transform: rotate(-45deg); }
+
+/* ---------- mobile menu overlay ---------- */
+.mobilemenu {
+  position: fixed; inset: 0; z-index: 70; background: var(--sx-black); color: var(--sx-cream);
+  display: flex; flex-direction: column; justify-content: center; gap: var(--sx-12);
+  padding: var(--gutter);
+  opacity: 0; visibility: hidden; transform: translateY(-8px);
+  transition: opacity 0.5s var(--ease), transform 0.6s var(--ease), visibility 0.5s var(--ease);
+}
+.mobilemenu.is-open { opacity: 1; visibility: visible; transform: none; }
+.mobilemenu__links { display: flex; flex-direction: column; gap: var(--sx-4); }
+.mobilemenu__link {
+  font-family: var(--f); background: none; border: none; text-align: left; padding: 0;
+  font-size: clamp(1.8rem, 9vw, 3rem); text-transform: uppercase; letter-spacing: 0.03em;
+  color: var(--sx-cream); text-decoration: none; cursor: pointer;
+}
+.mobilemenu__link:active { color: var(--sx-gold); }
+.mobilemenu__foot { display: flex; flex-direction: column; gap: var(--sx-2); color: var(--sx-gold); }
+.mobilemenu__foot a { color: inherit; text-decoration: none; letter-spacing: 0.2em; }
+
+/* ---------- View Bag — empty state modal ---------- */
+.bag {
+  position: fixed; inset: 0; z-index: 75; display: grid; place-items: center;
+  background: rgba(10,8,6,0.6); backdrop-filter: blur(6px);
+  opacity: 0; visibility: hidden; transition: opacity 0.4s var(--ease), visibility 0.4s var(--ease);
+  padding: var(--gutter);
+}
+.bag.is-open { opacity: 1; visibility: visible; }
+.bag__panel {
+  position: relative; width: min(460px, 100%); background: var(--sx-cream); color: var(--sx-espresso);
+  padding: clamp(2rem, 5vw, 3.5rem); display: flex; flex-direction: column; gap: var(--sx-3);
+  transform: translateY(14px); transition: transform 0.5s var(--ease);
+}
+.bag.is-open .bag__panel { transform: none; }
+.bag__close {
+  position: absolute; top: var(--sx-3); right: var(--sx-3); background: none; border: none;
+  font-family: var(--f); font-size: var(--t-lb); letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--sx-espresso); opacity: 0.6; cursor: none;
+}
+.bag__close:hover { opacity: 1; }
+.bag__title { font-size: var(--t-d2); text-transform: uppercase; letter-spacing: 0.02em; line-height: 1; margin-top: var(--sx-2); }
+.bag__p { font-size: var(--t-body); line-height: 1.7; color: rgba(47,38,24,0.7); }
+.bag .btn { margin-top: var(--sx-2); }
+
+/* ---------- form messages ---------- */
+.sub-msg { min-height: 1.2em; margin-top: 0.2rem; opacity: 0; transition: opacity 0.3s var(--ease); }
+.sub-msg.is-error, .sub-msg.is-ok { opacity: 1; }
+.sub-msg.is-error { color: #8a2f1f; }
+.sub-msg.is-ok { color: var(--sx-espresso); }
+
+/* ---------- mobile: swap nav links for burger ---------- */
+@media (max-width: 720px) {
+  .nav__links { display: none; }
+  .nav__burger { display: block; }
+  .footer__cols { gap: var(--sx-8); }
+  .footer__giant { font-size: clamp(2.6rem, 15vw, 6rem); }
+}

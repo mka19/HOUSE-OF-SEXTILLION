@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Page not found — SEXTILLION</title>
+    <meta name="description" content="This page could not be found. Return to the SEXTILLION maison." />
+    <meta name="theme-color" content="#0A0806" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230A0806'/%3E%3Ctext x='16' y='23' font-family='sans-serif' font-size='19' fill='%23BA9E78' text-anchor='middle'%3ES%3C/text%3E%3C/svg%3E" />
+    <style>
+      :root {
+        --sx-cream: #F6F3EE; --sx-gold: #BA9E78; --sx-espresso: #2F2618; --sx-black: #0A0806;
+        --ease: cubic-bezier(0.16, 1, 0.3, 1);
+        --f: "Duru Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body {
+        font-family: var(--f); background: var(--sx-black); color: var(--sx-cream);
+        min-height: 100vh; display: grid; place-items: center; text-align: center;
+        padding: clamp(1.5rem, 5vw, 6rem); overflow-x: hidden; -webkit-font-smoothing: antialiased;
+      }
+      .wrap { display: flex; flex-direction: column; align-items: center; gap: clamp(1.6rem, 4vw, 2.6rem); position: relative; z-index: 2; }
+      .bloom {
+        position: fixed; inset: -10%; z-index: 1; pointer-events: none;
+        background: radial-gradient(60% 50% at 50% 108%, var(--sx-gold) 0%, #8A6E47 20%, rgba(47,38,24,0) 60%);
+        opacity: 0; animation: bloom 3s var(--ease) 0.2s forwards;
+      }
+      @keyframes bloom { to { opacity: 0.5; } }
+      .eyebrow { display: inline-flex; align-items: center; gap: 0.9rem; font-size: 0.66rem; letter-spacing: 0.28em; text-transform: uppercase; color: var(--sx-gold); }
+      .eyebrow::before { content: ""; width: 24px; height: 1px; background: var(--sx-gold); }
+      .code { font-size: clamp(4rem, 18vw, 11rem); line-height: 0.9; letter-spacing: 0.02em; -webkit-text-stroke: 0.02em var(--sx-cream); }
+      .msg { font-size: clamp(1rem, 2.2vw, 1.4rem); letter-spacing: 0.02em; color: rgba(246,243,238,0.62); max-width: 32ch; line-height: 1.6; }
+      .home {
+        font-family: var(--f); display: inline-block; margin-top: 0.4rem;
+        background: var(--sx-cream); color: var(--sx-espresso); text-decoration: none;
+        padding: 1rem 2.4rem; font-size: 0.66rem; letter-spacing: 0.2em; text-transform: uppercase;
+        transition: background 0.4s var(--ease), color 0.4s var(--ease);
+      }
+      .home:hover { background: var(--sx-gold); color: var(--sx-black); }
+      .mark { position: fixed; top: clamp(1.1rem, 2.2vw, 1.8rem); left: 0; right: 0; text-align: center; font-size: clamp(0.8rem, 1.1vw, 1rem); letter-spacing: 0.5em; text-indent: 0.5em; text-transform: uppercase; color: var(--sx-gold); z-index: 3; }
+    </style>
+  </head>
+  <body>
+    <div class="bloom" aria-hidden="true"></div>
+    <div class="mark">SEXTILLION</div>
+    <div class="wrap">
+      <span class="eyebrow">Lost in the maison</span>
+      <div class="code">404</div>
+      <p class="msg">The page you're looking for has moved, sold out, or never existed. The collection, however, is right this way.</p>
+      <a class="home" href="/">Return home →</a>
+    </div>
+  </body>
+</html>

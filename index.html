@@ -5,7 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>SEXTILLION — Where luxury meets Bitcoin</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='0' fill='%230A0806'/%3E%3Ctext x='16' y='23' font-family='Duru Sans,sans-serif' font-size='19' fill='%23BA9E78' text-anchor='middle'%3ES%3C/text%3E%3C/svg%3E" />
-    <meta name="description" content="SEXTILLION — luxury bags, belts and shoes with Bitcoin point yield and digital provenance." />
+    <meta name="description" content="SEXTILLION — a luxury maison of bags, belts and shoes, rewarded in Bitcoin with on-chain provenance. Where luxury meets Bitcoin." />
+    <meta name="theme-color" content="#0A0806" />
+    <meta property="og:title" content="SEXTILLION — Where luxury meets Bitcoin" />
+    <meta property="og:description" content="A luxury maison of bags, belts and shoes, rewarded in Bitcoin with on-chain provenance." />
+    <meta property="og:type" content="website" />
     <!-- Duru Sans is self-hosted (inlined @font-face in style.css) — no external font fetch -->
     <link rel="stylesheet" href="./src/style.css" />
   </head>
@@ -26,9 +30,39 @@
         <a href="#collection" class="nav__link" data-cursor>New In</a>
         <a href="#model" class="nav__link" data-cursor>Our Story</a>
         <a href="#collection" class="nav__link" data-cursor>Collection</a>
-        <a href="#" class="nav__link" data-cursor>View Bag</a>
+        <button type="button" class="nav__link nav__bag" id="bag-open" data-cursor>View Bag</button>
       </nav>
+      <button type="button" class="nav__burger" id="nav-burger" aria-label="Menu" aria-expanded="false" data-cursor>
+        <span></span><span></span>
+      </button>
     </header>
+
+    <!-- mobile menu -->
+    <div class="mobilemenu" id="mobilemenu" aria-hidden="true">
+      <nav class="mobilemenu__links">
+        <a href="#collection" class="mobilemenu__link">New In</a>
+        <a href="#model" class="mobilemenu__link">Our Story</a>
+        <a href="#collection" class="mobilemenu__link">Collection</a>
+        <a href="#lookbook" class="mobilemenu__link">Lookbook</a>
+        <a href="#token" class="mobilemenu__link">TOKEN2049</a>
+        <button type="button" class="mobilemenu__link" id="bag-open-m">View Bag</button>
+      </nav>
+      <div class="mobilemenu__foot mono">
+        <a href="tel:+919860632502">+91 98606 32502</a>
+        <a href="mailto:hello@sextillion.co">hello@sextillion.co</a>
+      </div>
+    </div>
+
+    <!-- View Bag — empty state -->
+    <div class="bag" id="bag" aria-hidden="true">
+      <div class="bag__panel">
+        <button type="button" class="bag__close" id="bag-close" aria-label="Close" data-cursor>Close</button>
+        <span class="eyebrow"><span class="eyebrow__rule"></span>Your Bag</span>
+        <h3 class="bag__title">Your bag is empty.</h3>
+        <p class="bag__p">The Genesis Collection reveals soon. Join the list and you'll be first through the door.</p>
+        <a href="#subscribe" class="btn" id="bag-cta" data-cursor>Join the list →</a>
+      </div>
+    </div>
 
     <main id="top">
       <!-- HERO — restrained dark maison (§6.1): espresso ground, a slow breathing
@@ -170,15 +204,16 @@
       <!-- NEWSLETTER — the one saturated section -->
       <section class="subscribe" id="subscribe" data-bg="#BA9E78" data-fg="#2F2618" aria-label="Subscribe">
         <h2 class="d1 reveal" data-split>Your style journey<br />starts right now.</h2>
-        <form class="sub-form" onsubmit="return false">
+        <form class="sub-form" id="sub-form" novalidate>
           <label class="field"><span class="mono">Name</span><input type="text" name="name" autocomplete="name" /></label>
-          <label class="field"><span class="mono">Email</span><input type="email" name="email" autocomplete="email" /></label>
+          <label class="field"><span class="mono">Email</span><input type="email" name="email" autocomplete="email" required /></label>
           <div class="pills mono">
             <button type="button" class="pill" data-cursor>Bags</button>
             <button type="button" class="pill" data-cursor>Belts</button>
             <button type="button" class="pill" data-cursor>Shoes</button>
           </div>
           <button type="submit" class="btn" data-cursor>Subscribe →</button>
+          <p class="sub-msg mono" id="sub-msg" role="status" aria-live="polite"></p>
         </form>
       </section>
 
@@ -189,9 +224,26 @@
           <a href="#collection" class="btn btn--ghost" data-cursor>Shop Now</a>
         </div>
         <div class="footer__cols mono">
-          <div><span class="footer__h">Explore</span><a href="#model">Our Story</a><a href="#">FAQ</a><a href="#">Contact</a></div>
-          <div><span class="footer__h">Connect</span><a href="#">Instagram</a><a href="#">X</a><a href="#">WhatsApp</a></div>
-          <div><span class="footer__h">Legal</span><a href="#">Terms</a><a href="#">Privacy</a><a href="#">Shipping</a></div>
+          <div>
+            <span class="footer__h">Explore</span>
+            <a href="#model">Our Story</a>
+            <a href="#collection">Collection</a>
+            <a href="#lookbook">Lookbook</a>
+          </div>
+          <div>
+            <span class="footer__h">Connect</span>
+            <a href="tel:+919860632502">Call · +91 98606 32502</a>
+            <a href="https://wa.me/919860632502" target="_blank" rel="noopener">WhatsApp</a>
+            <a href="mailto:hello@sextillion.co">hello@sextillion.co</a>
+            <a href="https://instagram.com/sextillion.co" target="_blank" rel="noopener">Instagram · @sextillion.co</a>
+            <a href="https://x.com/sextillion_co" target="_blank" rel="noopener">X · @sextillion_co</a>
+          </div>
+          <div>
+            <span class="footer__h">Legal</span>
+            <a href="#subscribe">Shipping &amp; returns</a>
+            <a href="#subscribe">Terms of Service</a>
+            <a href="#subscribe">Privacy Policy</a>
+          </div>
         </div>
         <div class="footer__giant" aria-hidden="true">SEXTILLION</div>
         <div class="footer__legal mono">© 2024 SEXTILLION. All rights reserved.</div>

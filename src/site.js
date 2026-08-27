@@ -162,6 +162,46 @@ window.addEventListener('load', applyImages);
 /* ---------------- subscribe pills ---------------- */
 document.querySelectorAll('.pill').forEach((p) => p.addEventListener('click', () => p.classList.toggle('is-on')));
 
+/* ---------------- mobile menu ---------------- */
+const burger = document.getElementById('nav-burger');
+const mm = document.getElementById('mobilemenu');
+function toggleMenu(open) {
+  mm && mm.classList.toggle('is-open', open);
+  burger && burger.classList.toggle('is-open', open);
+  burger && burger.setAttribute('aria-expanded', String(open));
+  document.body.classList.toggle('menu-open', open);
+}
+burger && burger.addEventListener('click', () => toggleMenu(!mm.classList.contains('is-open')));
+document.querySelectorAll('.mobilemenu__link').forEach((a) => a.addEventListener('click', () => toggleMenu(false)));
+
+/* ---------------- View Bag (empty state) ---------------- */
+const bag = document.getElementById('bag');
+function toggleBag(open) { bag && bag.classList.toggle('is-open', open); document.body.classList.toggle('bag-open', open); }
+document.getElementById('bag-open') && document.getElementById('bag-open').addEventListener('click', () => toggleBag(true));
+document.getElementById('bag-open-m') && document.getElementById('bag-open-m').addEventListener('click', () => { toggleMenu(false); toggleBag(true); });
+document.getElementById('bag-close') && document.getElementById('bag-close').addEventListener('click', () => toggleBag(false));
+document.getElementById('bag-cta') && document.getElementById('bag-cta').addEventListener('click', () => toggleBag(false));
+bag && bag.addEventListener('click', (e) => { if (e.target === bag) toggleBag(false); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { toggleBag(false); toggleMenu(false); } });
+
+/* ---------------- subscribe form: validation + success ---------------- */
+const subForm = document.getElementById('sub-form');
+const subMsg = document.getElementById('sub-msg');
+subForm && subForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const email = (subForm.email.value || '').trim();
+  const ok = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email);
+  if (!ok) {
+    subMsg.textContent = 'Please enter a valid email address.';
+    subMsg.className = 'sub-msg mono is-error';
+    subForm.email.focus();
+    return;
+  }
+  subForm.querySelectorAll('input, button').forEach((el) => { el.disabled = true; });
+  subMsg.textContent = "You're on the list.";
+  subMsg.className = 'sub-msg mono is-ok';
+});
+
 /* ---------------- loader reveal ---------------- */
 function reveal() {
   const fill = document.getElementById('loader-fill');
